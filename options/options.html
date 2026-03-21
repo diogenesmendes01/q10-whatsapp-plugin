@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Q10 CRM — Configurações</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #F3F4F6;
+      color: #111827;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .header-logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 16px;
+      background: linear-gradient(135deg, #0EA5E9, #0369A1);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 32px;
+      font-weight: 700;
+      box-shadow: 0 4px 16px rgba(14,165,233,0.3);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      color: #6B7280;
+      font-size: 14px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #E5E7EB;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: #6B7280;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #D1D5DB;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Inter', monospace;
+      color: #111827;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #0EA5E9;
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.1);
+    }
+
+    .form-input::placeholder {
+      color: #9CA3AF;
+    }
+
+    .form-hint {
+      font-size: 11px;
+      color: #9CA3AF;
+      margin-top: 6px;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #0EA5E9;
+      color: white;
+      flex: 1;
+    }
+    .btn-primary:hover { background: #0369A1; }
+
+    .btn-danger {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+    .btn-danger:hover { background: #FECACA; }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .alert-success {
+      background: #D1FAE5;
+      color: #065F46;
+      border: 1px solid #A7F3D0;
+    }
+
+    .alert-error {
+      background: #FEE2E2;
+      color: #991B1B;
+      border: 1px solid #FECACA;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #F9FAFB;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-dot.green { background: #10B981; }
+    .status-dot.red { background: #EF4444; }
+
+    .status-label {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .info-box {
+      background: #EFF6FF;
+      border: 1px solid #BFDBFE;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #1E40AF;
+      line-height: 1.6;
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .info-box code {
+      background: rgba(30,64,175,0.1);
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-logo">Q</div>
+      <h1>Q10 CRM — Configurações</h1>
+      <p>Genius Idiomas · WhatsApp Web Integration</p>
+    </div>
+
+    <div class="alert alert-success" id="alert-success">✅ Configuração salva com sucesso!</div>
+    <div class="alert alert-error" id="alert-error"></div>
+
+    <div class="card">
+      <div class="card-title">API Key do Q10</div>
+      <div class="card-desc">
+        Insira sua chave de API do Q10 Académico. Ela é usada para consultar dados de estudantes, contatos e oportunidades.
+      </div>
+
+      <div class="status-indicator" id="key-status">
+        <div class="status-dot red" id="key-dot"></div>
+        <span class="status-label" id="key-label">Não configurada</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Ocp-Apim-Subscription-Key</label>
+        <input type="password" class="form-input" id="api-key-input"
+               placeholder="Cole sua API key aqui...">
+        <div class="form-hint">A chave é armazenada de forma segura no Chrome e sincronizada entre dispositivos.</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save">💾 Salvar</button>
+        <button class="btn btn-danger" id="btn-clear">🗑️ Limpar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Como obter a API Key</div>
+      <div class="info-box">
+        <strong>📋 Passos:</strong>
+        1. Acesse <a href="https://app.q10.com" target="_blank" style="color:#0EA5E9">app.q10.com</a><br>
+        2. Vá em <strong>Configuración → Integraciones → API</strong><br>
+        3. Copie o valor da chave <code>Ocp-Apim-Subscription-Key</code><br>
+        4. Cole no campo acima e clique em Salvar
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Teste de Conexão</div>
+      <div class="card-desc">Verifique se a API key está funcionando corretamente.</div>
+      <button class="btn btn-primary" id="btn-test" style="width:100%">🔌 Testar Conexão</button>
+      <div id="test-result" style="margin-top: 12px; font-size: 13px; display: none;"></div>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
