@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Q10 CRM para WhatsApp Web",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Integração Q10 CRM com WhatsApp Web — veja dados de alunos, leads e oportunidades direto no WhatsApp.",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "sidePanel"
   ],
   "host_permissions": [
     "https://api.q10.com/*"
@@ -17,10 +18,13 @@
     {
       "matches": ["https://web.whatsapp.com/*"],
       "js": ["content/content.js"],
-      "css": ["styles/panel.css"],
+      "css": ["styles/content.css"],
       "run_at": "document_idle"
     }
   ],
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

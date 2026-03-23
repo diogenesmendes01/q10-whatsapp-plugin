@@ -1,0 +1,78 @@
+/* ============================================================
+   Q10 CRM — Content Script Styles (minimal)
+   Only the floating toggle button + toast notifications
+   Panel UI is now in the Chrome Side Panel
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ---------- Toggle button (floating) ---------- */
+
+.q10-toggle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0EA5E9, #0369A1);
+  color: white;
+  border: none;
+  cursor: pointer;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
+  transition: all 0.2s;
+}
+
+.q10-toggle-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 24px rgba(14, 165, 233, 0.5);
+}
+
+.q10-toggle-btn.q10-has-data {
+  animation: q10-pulse 2s ease-in-out infinite;
+}
+
+@keyframes q10-pulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); }
+  50% { box-shadow: 0 4px 24px rgba(14, 165, 233, 0.7); }
+}
+
+.q10-toggle-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* ---------- Toast notification ---------- */
+
+.q10-toast {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  background: #111827;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  z-index: 10001;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+  animation: q10-toast-in 0.3s ease;
+  max-width: 300px;
+}
+
+.q10-toast.q10-toast-success {
+  background: #065F46;
+}
+
+.q10-toast.q10-toast-error {
+  background: #991B1B;
+}
+
+@keyframes q10-toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

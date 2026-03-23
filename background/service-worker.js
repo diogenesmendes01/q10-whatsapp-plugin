@@ -1,6 +1,6 @@
 /* ============================================================
    Q10 CRM — Background Service Worker
-   Handles all API calls to avoid CORS issues in content scripts.
+   Handles API calls + Side Panel management + phone relay.
    ============================================================ */
 
 const API_BASE = 'https://api.q10.com/v1';
@@ -27,6 +27,11 @@ function getCached(key, ttl) {
 function setCache(key, data) {
   cache.set(key, { data, ts: Date.now() });
 }
+
+// ---------- Side Panel setup ----------
+
+// Open side panel when extension icon is clicked
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 // ---------- API helpers ----------
 
@@ -128,7 +133,6 @@ async function searchByPhone(phone) {
         results.type = 'estudiante';
         results.data = match;
 
-        // Fetch financial data for estudiante
         try {
           const estado = await apiGet('/estadocuentaestudiantes', {}, { shortCache: true });
           if (Array.isArray(estado)) {
@@ -208,7 +212,7 @@ async function searchByPhone(phone) {
   return results;
 }
 
-// ---------- Fetch catalogs (programas, periodos) ----------
+// ---------- Fetch catalogs ----------
 
 async function fetchCatalogs() {
   const [programas, periodos] = await Promise.all([
@@ -218,7 +222,7 @@ async function fetchCatalogs() {
   return { programas: Array.isArray(programas) ? programas : [], periodos: Array.isArray(periodos) ? periodos : [] };
 }
 
-// ---------- Fetch student financial data ----------
+// ---------- Fetch student financials ----------
 
 async function fetchStudentFinancials(codigoEstudiante) {
   const [estado, pendientes, pagos] = await Promise.all([
@@ -246,7 +250,7 @@ async function fetchStudentFinancials(codigoEstudiante) {
 
 // ---------- Message handler ----------
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const handle = (promise) => {
     promise
       .then(data => sendResponse({ ok: true, data }))
@@ -255,6 +259,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   };
 
   switch (msg.action) {
+    // --- Side Panel ---
+    case 'openSidePanel':
+      (async () => {
+        try {
+          const window = await chrome.windows.getCurrent();
+          await chrome.sidePanel.open({ windowId: window.id });
+          sendResponse({ ok: true });
+        } catch (err) {
+          sendResponse({ ok: false, error: err.message });
+        }
+      })();
+      return true;
+
+    case 'phoneChanged':
+      // Store phone in session storage so side panel can read it
+      chrome.storage.session.set({ currentPhone: msg.phone || null });
+      sendResponse({ ok: true });
+      return false;
+
+    // --- API calls ---
     case 'searchPhone':
       return handle(searchByPhone(msg.phone));
 

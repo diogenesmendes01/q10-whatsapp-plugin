@@ -1,33 +1,30 @@
 /* ============================================================
-   Q10 CRM Panel — Injected into WhatsApp Web
-   All classes prefixed with q10- for isolation
-   v2.0 — Enrollment wizard + financials
+   Q10 CRM Side Panel Styles
+   Runs as a standalone page inside Chrome Side Panel
+   v2.0
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* ---------- Panel container ---------- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-.q10-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 360px;
-  height: 100vh;
-  background: #F9FAFB;
-  border-left: 1px solid #E5E7EB;
-  z-index: 9999;
+body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #111827;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #F9FAFB;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
   overflow: hidden;
 }
 
-.q10-panel.q10-hidden {
-  transform: translateX(100%);
+/* ---------- Root container ---------- */
+
+.q10-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* ---------- Header ---------- */
@@ -54,6 +51,11 @@
   flex-shrink: 0;
 }
 
+.q10-header-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
 .q10-header-title {
   font-size: 16px;
   font-weight: 700;
@@ -64,24 +66,6 @@
   font-size: 11px;
   opacity: 0.85;
   font-weight: 400;
-}
-
-.q10-btn-close {
-  background: rgba(255,255,255,0.15);
-  border: none;
-  color: white;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-
-.q10-btn-close:hover {
-  background: rgba(255,255,255,0.25);
 }
 
 /* ---------- Content area ---------- */
@@ -161,25 +145,10 @@
   margin-bottom: 16px;
 }
 
-.q10-type-estudiante {
-  background: #D1FAE5;
-  color: #065F46;
-}
-
-.q10-type-oportunidad {
-  background: #FEF3C7;
-  color: #92400E;
-}
-
-.q10-type-contacto {
-  background: #DBEAFE;
-  color: #1E40AF;
-}
-
-.q10-type-unknown {
-  background: #F3F4F6;
-  color: #6B7280;
-}
+.q10-type-estudiante { background: #D1FAE5; color: #065F46; }
+.q10-type-oportunidad { background: #FEF3C7; color: #92400E; }
+.q10-type-contacto { background: #DBEAFE; color: #1E40AF; }
+.q10-type-unknown { background: #F3F4F6; color: #6B7280; }
 
 .q10-contact-name {
   font-size: 20px;
@@ -197,9 +166,7 @@
 
 /* ---------- Info sections ---------- */
 
-.q10-section {
-  margin-bottom: 20px;
-}
+.q10-section { margin-bottom: 20px; }
 
 .q10-section-title {
   font-size: 11px;
@@ -213,10 +180,7 @@
   gap: 6px;
 }
 
-.q10-section-icon {
-  width: 14px;
-  height: 14px;
-}
+.q10-section-icon { width: 14px; height: 14px; }
 
 .q10-info-card {
   background: white;
@@ -263,30 +227,11 @@
   font-weight: 600;
 }
 
-.q10-badge-green {
-  background: #D1FAE5;
-  color: #065F46;
-}
-
-.q10-badge-yellow {
-  background: #FEF3C7;
-  color: #92400E;
-}
-
-.q10-badge-red {
-  background: #FEE2E2;
-  color: #991B1B;
-}
-
-.q10-badge-blue {
-  background: #DBEAFE;
-  color: #1E40AF;
-}
-
-.q10-badge-gray {
-  background: #F3F4F6;
-  color: #6B7280;
-}
+.q10-badge-green { background: #D1FAE5; color: #065F46; }
+.q10-badge-yellow { background: #FEF3C7; color: #92400E; }
+.q10-badge-red { background: #FEE2E2; color: #991B1B; }
+.q10-badge-blue { background: #DBEAFE; color: #1E40AF; }
+.q10-badge-gray { background: #F3F4F6; color: #6B7280; }
 
 /* ---------- Activity list ---------- */
 
@@ -345,122 +290,48 @@
   transition: all 0.2s;
 }
 
-.q10-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.q10-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.q10-btn-primary {
-  background: #0EA5E9;
-  color: white;
-}
+.q10-btn-primary { background: #0EA5E9; color: white; }
+.q10-btn-primary:hover:not(:disabled) { background: #0369A1; }
 
-.q10-btn-primary:hover:not(:disabled) {
-  background: #0369A1;
-}
+.q10-btn-cta { background: #F97316; color: white; }
+.q10-btn-cta:hover:not(:disabled) { background: #EA580C; }
 
-.q10-btn-cta {
-  background: #F97316;
-  color: white;
-}
+.q10-btn-success { background: #10B981; color: white; }
+.q10-btn-success:hover:not(:disabled) { background: #059669; }
 
-.q10-btn-cta:hover:not(:disabled) {
-  background: #EA580C;
-}
+.q10-btn-outline { background: white; color: #374151; border: 1px solid #D1D5DB; }
+.q10-btn-outline:hover:not(:disabled) { background: #F9FAFB; border-color: #9CA3AF; }
 
-.q10-btn-success {
-  background: #10B981;
-  color: white;
-}
+.q10-btn-icon { width: 16px; height: 16px; flex-shrink: 0; }
 
-.q10-btn-success:hover:not(:disabled) {
-  background: #059669;
-}
+/* ---------- Phone display ---------- */
 
-.q10-btn-outline {
+.q10-phone-display {
   background: white;
-  color: #374151;
-  border: 1px solid #D1D5DB;
-}
-
-.q10-btn-outline:hover:not(:disabled) {
-  background: #F9FAFB;
-  border-color: #9CA3AF;
-}
-
-.q10-btn-icon {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
-}
-
-/* ---------- Toggle button (floating) ---------- */
-
-.q10-toggle-btn {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #0EA5E9, #0369A1);
-  color: white;
-  border: none;
-  cursor: pointer;
-  z-index: 9998;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
-  transition: all 0.2s;
+  gap: 10px;
 }
 
-.q10-toggle-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 6px 24px rgba(14, 165, 233, 0.5);
-}
+.q10-phone-icon { width: 18px; height: 18px; color: #0EA5E9; flex-shrink: 0; }
 
-.q10-toggle-btn.q10-has-data {
-  animation: q10-pulse 2s ease-in-out infinite;
-}
-
-@keyframes q10-pulse {
-  0%, 100% { box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); }
-  50% { box-shadow: 0 4px 24px rgba(14, 165, 233, 0.7); }
-}
-
-.q10-toggle-icon {
-  width: 24px;
-  height: 24px;
-}
-
-/* ---------- Error state ---------- */
-
-.q10-error {
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-}
-
-.q10-error-title {
-  font-size: 13px;
+.q10-phone-number {
+  font-size: 14px;
   font-weight: 600;
-  color: #991B1B;
-  margin-bottom: 4px;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
 }
 
-.q10-error-text {
-  font-size: 12px;
-  color: #B91C1C;
-  line-height: 1.4;
-}
-
-/* ---------- Modal / Form overlay ---------- */
+/* ---------- Modal overlay ---------- */
 
 .q10-modal-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.4);
   display: flex;
@@ -516,9 +387,25 @@
   flex-shrink: 0;
 }
 
-.q10-form-group {
-  margin-bottom: 14px;
+.q10-modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
 }
+
+.q10-modal-close-btn:hover { background: #F3F4F6; }
+
+/* ---------- Forms ---------- */
+
+.q10-form-group { margin-bottom: 14px; }
 
 .q10-form-label {
   display: block;
@@ -551,17 +438,15 @@
   box-shadow: 0 0 0 3px rgba(14,165,233,0.1);
 }
 
-.q10-form-textarea {
-  resize: vertical;
-  min-height: 70px;
-}
+.q10-form-textarea { resize: vertical; min-height: 70px; }
 
-/* ---------- Toast notification ---------- */
+/* ---------- Toast ---------- */
 
 .q10-toast {
   position: fixed;
-  bottom: 90px;
-  right: 24px;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
   background: #111827;
   color: white;
   padding: 12px 20px;
@@ -571,47 +456,16 @@
   z-index: 10001;
   box-shadow: 0 8px 24px rgba(0,0,0,0.2);
   animation: q10-toast-in 0.3s ease;
-  max-width: 300px;
+  max-width: 90%;
+  text-align: center;
 }
 
-.q10-toast.q10-toast-success {
-  background: #065F46;
-}
-
-.q10-toast.q10-toast-error {
-  background: #991B1B;
-}
+.q10-toast-success { background: #065F46; }
+.q10-toast-error { background: #991B1B; }
 
 @keyframes q10-toast-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ---------- Phone display ---------- */
-
-.q10-phone-display {
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.q10-phone-icon {
-  width: 18px;
-  height: 18px;
-  color: #0EA5E9;
-  flex-shrink: 0;
-}
-
-.q10-phone-number {
-  font-size: 14px;
-  font-weight: 600;
-  color: #111827;
-  font-variant-numeric: tabular-nums;
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 /* ============================================================
@@ -650,66 +504,38 @@
 }
 
 .q10-step.pending .q10-step-circle {
-  background: #F3F4F6;
-  color: #9CA3AF;
-  border: 2px solid #E5E7EB;
+  background: #F3F4F6; color: #9CA3AF; border: 2px solid #E5E7EB;
 }
 
 .q10-step.active .q10-step-circle {
-  background: #0EA5E9;
-  color: white;
-  border: 2px solid #0EA5E9;
+  background: #0EA5E9; color: white; border: 2px solid #0EA5E9;
   box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
 }
 
 .q10-step.done .q10-step-circle {
-  background: #10B981;
-  color: white;
-  border: 2px solid #10B981;
+  background: #10B981; color: white; border: 2px solid #10B981;
 }
 
-.q10-step.done .q10-step-circle svg {
-  width: 16px;
-  height: 16px;
-}
+.q10-step.done .q10-step-circle svg { width: 16px; height: 16px; }
 
 .q10-step-label {
-  font-size: 10px;
-  font-weight: 600;
-  text-align: center;
-  max-width: 56px;
-  line-height: 1.2;
-  color: #9CA3AF;
-  transition: color 0.3s;
+  font-size: 10px; font-weight: 600; text-align: center;
+  max-width: 56px; line-height: 1.2; color: #9CA3AF; transition: color 0.3s;
 }
 
-.q10-step.active .q10-step-label {
-  color: #0EA5E9;
-}
-
-.q10-step.done .q10-step-label {
-  color: #10B981;
-}
+.q10-step.active .q10-step-label { color: #0EA5E9; }
+.q10-step.done .q10-step-label { color: #10B981; }
 
 .q10-step-line {
-  width: 20px;
-  height: 2px;
-  background: #E5E7EB;
-  margin-top: 16px;
-  flex-shrink: 0;
-  transition: background 0.3s;
-  border-radius: 1px;
+  width: 20px; height: 2px; background: #E5E7EB;
+  margin-top: 16px; flex-shrink: 0; transition: background 0.3s; border-radius: 1px;
 }
 
-.q10-step-line.done {
-  background: #10B981;
-}
+.q10-step-line.done { background: #10B981; }
 
 /* ---------- Wizard form area ---------- */
 
-.q10-wizard-form {
-  animation: q10-fade-in 0.3s ease;
-}
+.q10-wizard-form { animation: q10-fade-in 0.3s ease; }
 
 @keyframes q10-fade-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -727,52 +553,15 @@
   border-radius: 12px;
 }
 
-.q10-wizard-step-icon {
-  width: 24px;
-  height: 24px;
-  color: #0EA5E9;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
+.q10-wizard-step-icon { width: 24px; height: 24px; color: #0EA5E9; flex-shrink: 0; margin-top: 2px; }
 
-.q10-wizard-step-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #111827;
-  margin-bottom: 2px;
-}
+.q10-wizard-step-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 2px; }
 
-.q10-wizard-step-desc {
-  font-size: 12px;
-  color: #6B7280;
-  line-height: 1.4;
-}
+.q10-wizard-step-desc { font-size: 12px; color: #6B7280; line-height: 1.4; }
 
-/* ---------- Responsive adjustments ---------- */
+/* ---------- Responsive ---------- */
 
-@media (max-width: 1200px) {
-  .q10-panel {
-    width: 320px;
-  }
-  .q10-step-line {
-    width: 14px;
-  }
-  .q10-step-label {
-    max-width: 48px;
-    font-size: 9px;
-  }
-}
-
-@media (max-width: 900px) {
-  .q10-panel {
-    width: 300px;
-  }
-  .q10-step-line {
-    width: 10px;
-  }
-  .q10-step-circle {
-    width: 28px;
-    height: 28px;
-    font-size: 11px;
-  }
+@media (max-width: 360px) {
+  .q10-step-line { width: 14px; }
+  .q10-step-label { max-width: 48px; font-size: 9px; }
 }
