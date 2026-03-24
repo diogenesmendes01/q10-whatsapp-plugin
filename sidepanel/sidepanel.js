@@ -483,22 +483,31 @@
   // ================================================================
   //  RENDER: UNKNOWN CONTACT
   // ================================================================
-  function renderUnknown(phone) {
+  function renderUnknown(phoneOrName) {
+    // Detect if it's a phone or a name
+    const isPhone = /^\+?\d[\d\s\-]{7,}$/.test((phoneOrName || '').replace(/[\s\-]/g, ''));
+    const detectedPhone = isPhone ? phoneOrName : currentPhone;
+    const detectedName = isPhone ? null : phoneOrName;
+
+    const displayHtml = isPhone 
+      ? phoneHtml(detectedPhone)
+      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${detectedName}</span></div>`;
+
     body().innerHTML = `
-      ${phoneHtml(phone)}
+      ${displayHtml}
       <div class="q10-state">
         <span class="q10-state-icon">${ICONS.userPlus}</span>
-        <div class="q10-state-title">Contato não encontrado</div>
-        <div class="q10-state-text">Este número não está cadastrado no Q10.</div>
+        <div class="q10-state-title">Contacto no encontrado</div>
+        <div class="q10-state-text">${isPhone ? 'Este número no está registrado en Q10.' : 'Este contacto no está registrado en Q10.'}</div>
       </div>`;
     showActions(`
       <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>
       <button class="q10-btn q10-btn-primary" id="q10-create-lead">${icon('plus','q10-btn-icon')} Crear Oportunidad</button>
       <button class="q10-btn q10-btn-outline" id="q10-create-contacto-only">${icon('userPlus','q10-btn-icon')} Registrar Contacto</button>
     `);
-    document.getElementById('q10-start-enrollment').addEventListener('click', () => startEnrollmentWizard(phone));
-    document.getElementById('q10-create-lead').addEventListener('click', () => showCreateOportunidadModal(phone));
-    document.getElementById('q10-create-contacto-only').addEventListener('click', () => showCreateContactoModal(phone));
+    document.getElementById('q10-start-enrollment').addEventListener('click', () => startEnrollmentWizard(detectedPhone, detectedName));
+    document.getElementById('q10-create-lead').addEventListener('click', () => showCreateOportunidadModal(detectedPhone, detectedName));
+    document.getElementById('q10-create-contacto-only').addEventListener('click', () => showCreateContactoModal(detectedPhone, detectedName));
   }
 
   // ================================================================
@@ -1182,7 +1191,7 @@
     });
   }
 
-  function showCreateOportunidadModal(phone, contactData) {
+  function showCreateOportunidadModal(phone, detectedName, contactData) {
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
@@ -1248,7 +1257,7 @@
     });
   }
 
-  function showCreateContactoModal(phone) {
+  function showCreateContactoModal(phone, detectedName) {
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
@@ -1258,8 +1267,8 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-ct-fname" placeholder="Nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-ct-lname" placeholder="Apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ')[0] : ''}" placeholder="Nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellido"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
           <div class="q10-form-group"><label class="q10-form-label">Celular *</label>
             <div style="display:flex;gap:6px">
