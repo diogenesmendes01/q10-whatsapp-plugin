@@ -188,7 +188,7 @@
 
   function extractContactFromDOM() {
     // --- Try phone first ---
-    const headerEl = document.querySelector('#main header span[title]');
+    const headerEl = document.querySelector('#main header span');
     if (headerEl) {
       const title = headerEl.getAttribute('title') || '';
       const phone = isPhoneNumber(title);
