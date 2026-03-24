@@ -177,10 +177,10 @@
    */
   function getCurrentChatFromDOM() {
     try {
-      const headerEl = document.querySelector('#main header span[title]');
+      const headerEl = document.querySelector('#main header span');
       if (!headerEl) return null;
 
-      const title = (headerEl.getAttribute('title') || '').trim();
+      const title = (headerEl.textContent || '').trim();
       if (!title) return null;
 
       const chatId = getChatIdFromDOM();
