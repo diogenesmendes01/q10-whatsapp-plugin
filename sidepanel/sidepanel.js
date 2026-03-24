@@ -1343,14 +1343,23 @@
     
     if (changes.currentContactName) {
       const newName = changes.currentContactName.newValue;
+      // Also capture phone if it arrived in the same change event
+      const phoneFromChange = changes.currentPhone?.newValue || null;
+      if (phoneFromChange) currentPhone = phoneFromChange;
       if (newName) {
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
+            // If we have a phone, search by phone first (more accurate)
+            if (currentPhone) {
+              renderLoading('Buscando: ' + currentPhone + '...');
+              searchPhone(currentPhone);
+              return;
+            }
             renderLoading('Buscando: ' + newName + '...');
             chrome.runtime.sendMessage({ action: 'searchName', name: newName }, (searchResp) => {
               if (searchResp && searchResp.ok) {
                 currentResult = searchResp.data;
-                currentPhone = searchResp.data?.phone || null;
+                currentPhone = searchResp.data?.phone || currentPhone || null;
                 if (searchResp.data.type === 'unknown') {
                   renderUnknown(newName);
                 } else if (searchResp.data.type === 'estudiante') {

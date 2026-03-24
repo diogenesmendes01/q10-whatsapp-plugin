@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Q10 CRM para WhatsApp Web",
-  "version": "3.2.4",
+  "version": "3.3.0",
   "description": "CRM Q10 integrado con WhatsApp Web — consulta datos de estudiantes, leads y oportunidades directamente desde WhatsApp.",
   "permissions": [
     "storage",

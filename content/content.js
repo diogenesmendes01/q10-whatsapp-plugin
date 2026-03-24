@@ -187,53 +187,63 @@
   }
 
   function extractContactFromDOM() {
-    // --- Try phone first ---
+    const mainHeader = document.querySelector('#main header');
     const headerEl = document.querySelector('#main header span');
+    let detectedPhone = null;
+    let detectedName = null;
+    let isGroup = false;
+
+    // 1. Get name from header (always try)
     if (headerEl) {
       const headerText = (headerEl.textContent || '').trim();
-      const phone = isPhoneNumber(headerText);
-      if (phone) return { phone, name: null, isGroup: false };
+      const phoneFromHeader = isPhoneNumber(headerText);
+      if (phoneFromHeader) {
+        detectedPhone = phoneFromHeader;
+      } else {
+        const nameFromHeader = isContactName(headerText);
+        if (nameFromHeader) detectedName = nameFromHeader;
+      }
     }
 
-    // data-id from messages (number@c.us)
-    const msgContainers = document.querySelectorAll('#main [data-id]');
-    for (const el of msgContainers) {
-      const dataId = el.getAttribute('data-id') || '';
-      const match = dataId.match(/(\d{10,15})@/);
-      if (match) return { phone: match[1], name: null, isGroup: false };
+    // 2. Get phone from data-id in messages (number@c.us format)
+    if (!detectedPhone) {
+      const msgContainers = document.querySelectorAll('#main [data-id]');
+      for (const el of msgContainers) {
+        const dataId = el.getAttribute('data-id') || '';
+        // Format: "true_5519988145438@c.us_XXXXX" or "false_5519988145438@c.us_XXXXX"
+        const match = dataId.match(/(\d{10,15})@/);
+        if (match) { detectedPhone = match[1]; break; }
+      }
     }
 
-    // All spans in header for phone-like text
-    const mainHeader = document.querySelector('#main header');
-    if (mainHeader) {
+    // 3. Check all spans in header for phone
+    if (!detectedPhone && mainHeader) {
       const spans = mainHeader.querySelectorAll('span');
       for (const span of spans) {
-        const phone = isPhoneNumber(span.textContent) || isPhoneNumber(span.getAttribute('title'));
-        if (phone) return { phone, name: null, isGroup: false };
+        const phone = isPhoneNumber(span.textContent);
+        if (phone) { detectedPhone = phone; break; }
       }
     }
 
-    // --- If no phone, try contact name ---
-    if (headerEl) {
-      const headerText2 = (headerEl.textContent || '').trim();
-      const name = isContactName(headerText2);
-      if (name) {
-        // Check if it's a group by looking for group indicators
-        const isGroup = !!mainHeader?.querySelector('span[data-icon="default-group"]') ||
-                        !!document.querySelector('#main header img[data-icon="default-group"]');
-        return { phone: null, name, isGroup };
-      }
-    }
-
-    if (mainHeader) {
+    // 4. Try span[dir="auto"] for name if still missing
+    if (!detectedName && mainHeader) {
       const autoSpan = mainHeader.querySelector('span[dir="auto"]');
       if (autoSpan) {
         const name = isContactName(autoSpan.textContent);
-        if (name) return { phone: null, name, isGroup: false };
+        if (name) detectedName = name;
       }
     }
 
-    return null;
+    // 5. Check if group
+    if (mainHeader) {
+      isGroup = !!mainHeader.querySelector('span[data-icon="default-group"]') ||
+                !!document.querySelector('#main header img[data-icon="default-group"]');
+    }
+
+    if (!detectedPhone && !detectedName) return null;
+
+    log('[DOM] Extracted — name:', detectedName, 'phone:', detectedPhone, 'group:', isGroup);
+    return { phone: detectedPhone, name: detectedName, isGroup };
   }
 
   let domDebounce = null;
