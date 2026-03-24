@@ -3,7 +3,7 @@
    All panel rendering logic, wizard, modals.
    Communicates with service worker for API + with content script
    via chrome.storage.session for phone detection.
-   v2.0
+   v3.0
    ============================================================ */
 
 (function () {
@@ -107,27 +107,55 @@
   }
 
   function renderNoApiKey() {
-    body().innerHTML = `
-      <div class="q10-state">
-        <span class="q10-state-icon">${ICONS.settings}</span>
-        <div class="q10-state-title">API Key não configurada</div>
-        <div class="q10-state-text">Configure sua chave de API do Q10 nas configurações da extensão.</div>
-        <button class="q10-btn q10-btn-primary" id="q10-open-settings">${icon('settings','q10-btn-icon')} Configurações</button>
-      </div>`;
-    hideActions();
-    document.getElementById('q10-open-settings').addEventListener('click', () => {
-      chrome.runtime.openOptionsPage();
-    });
+    // In mock/demo mode, just show no conversation
+    renderNoConversation();
   }
 
   function renderNoConversation() {
-    body().innerHTML = `
-      <div class="q10-state">
-        <span class="q10-state-icon">${ICONS.search}</span>
-        <div class="q10-state-title">Selecione uma conversa</div>
-        <div class="q10-state-text">Abra uma conversa no WhatsApp para buscar os dados do contato no Q10.</div>
-      </div>`;
     hideActions();
+    body().innerHTML = `
+      <div class="q10-empty">
+        <div class="q10-empty-icon">${icon('search')}</div>
+        <p class="q10-empty-title">Sin conversación activa</p>
+        <p class="q10-empty-desc">Abre una conversación en WhatsApp o busca manualmente:</p>
+        <div class="q10-manual-search">
+          <input type="text" id="q10-manual-input" placeholder="Teléfono o nombre..." class="q10-input" />
+          <button id="q10-manual-btn" class="q10-btn q10-btn-primary">
+            ${icon('search')} Buscar
+          </button>
+        </div>
+      </div>
+    `;
+    
+    const input = document.getElementById('q10-manual-input');
+    const btn = document.getElementById('q10-manual-btn');
+    
+    btn.addEventListener('click', () => {
+      const value = input.value.trim();
+      if (!value) return;
+      // Detect if it's a phone or name
+      const isPhone = /^\+?\d[\d\s\-]{7,}$/.test(value.replace(/[\s\-]/g, ''));
+      if (isPhone) {
+        searchPhone(value.replace(/[\s\-\(\)]/g, ''));
+      } else {
+        renderLoading('Buscando: ' + value + '...');
+        chrome.runtime.sendMessage({ action: 'searchName', name: value }, (resp) => {
+          if (resp && resp.ok) {
+            currentResult = resp.data;
+            if (resp.data.type === 'unknown') renderUnknown(value);
+            else if (resp.data.type === 'estudiante') renderEstudiante(resp.data);
+            else if (resp.data.type === 'contacto') renderContacto(resp.data);
+            else if (resp.data.type === 'oportunidad') renderOportunidad(resp.data);
+          } else {
+            renderUnknown(value);
+          }
+        });
+      }
+    });
+    
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') btn.click();
+    });
   }
 
   function renderError(msg) {
@@ -1046,7 +1074,7 @@
       });
     });
 
-    console.log('[Q10 CRM] Side panel loaded (v2.0)');
+    console.log('[Q10 CRM] Side panel loaded (v3.0)');
   }
 
   init();

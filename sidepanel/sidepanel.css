@@ -1,7 +1,7 @@
 /* ============================================================
    Q10 CRM Side Panel Styles
    Runs as a standalone page inside Chrome Side Panel
-   v2.0
+   v3.0
    ============================================================ */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
@@ -326,6 +326,64 @@ body {
   font-weight: 600;
   color: #111827;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Manual search ---------- */
+
+.q10-manual-search {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}
+.q10-manual-search .q10-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.q10-manual-search .q10-input:focus {
+  border-color: #0EA5E9;
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.1);
+}
+.q10-manual-search .q10-btn {
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+
+/* ---------- Empty state ---------- */
+
+.q10-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  gap: 12px;
+}
+
+.q10-empty-icon {
+  width: 64px;
+  height: 64px;
+  color: #9CA3AF;
+}
+
+.q10-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.q10-empty-desc {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.5;
+  margin: 0;
 }
 
 /* ---------- Modal overlay ---------- */
