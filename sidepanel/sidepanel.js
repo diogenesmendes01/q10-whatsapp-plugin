@@ -41,6 +41,7 @@
   //  STATE
   // ================================================================
   let currentPhone = null;
+  let currentContactName = null;
   let currentResult = null;
   let wizardState = null;
   let catalogsCache = null;
@@ -487,7 +488,7 @@
     // Detect if it's a phone or a name
     const isPhone = /^\+?\d[\d\s\-]{7,}$/.test((phoneOrName || '').replace(/[\s\-]/g, ''));
     const detectedPhone = isPhone ? phoneOrName : currentPhone;
-    const detectedName = isPhone ? null : phoneOrName;
+    const detectedName = isPhone ? currentContactName : (phoneOrName || currentContactName);
 
     const displayHtml = isPhone 
       ? phoneHtml(detectedPhone)
@@ -1170,7 +1171,7 @@
     });
   }
 
-  function showCreateOportunidadModal(phone, detectedName, contactData) {
+  function showCreateOportunidadModal(phone, detectedName = null, contactData) {
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
@@ -1215,7 +1216,8 @@
     });
   }
 
-  function showCreateContactoModal(phone, detectedName) {
+  function showCreateContactoModal(phone, detectedName = null) {
+    if (!detectedName) detectedName = currentContactName;
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
@@ -1327,6 +1329,8 @@
     
     if (changes.currentPhone) {
       const newPhone = changes.currentPhone.newValue;
+      // Also grab name if it came in same event
+      if (changes.currentContactName?.newValue) currentContactName = changes.currentContactName.newValue;
       if (newPhone && newPhone !== currentPhone) {
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
@@ -1346,6 +1350,7 @@
       // Also capture phone if it arrived in the same change event
       const phoneFromChange = changes.currentPhone?.newValue || null;
       if (phoneFromChange) currentPhone = phoneFromChange;
+      currentContactName = newName;
       if (newName) {
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
