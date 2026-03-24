@@ -357,6 +357,34 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'createActividad':
       return handle(apiPost('/actividades', msg.body));
 
+
+    case 'exportAll':
+      return handle((async () => {
+        const [contactos, estudiantes, oportunidades] = await Promise.all([
+          apiGet('/contactos').catch(() => []),
+          apiGet('/estudiantes').catch(() => []),
+          apiGet('/oportunidades').catch(() => [])
+        ]);
+        return { contactos, estudiantes, oportunidades };
+      })());
+
+    case 'exportConversation':
+      // Forward to content script in active WhatsApp tab
+      (async () => {
+        try {
+          const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*', active: true });
+          if (!tabs.length) {
+            sendResponse({ ok: false, error: 'WhatsApp Web no encontrado' });
+            return;
+          }
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'exportConversation' }, (resp) => {
+            sendResponse(resp || { ok: false, error: 'Sin respuesta' });
+          });
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message });
+        }
+      })();
+      return true;
     case 'checkApiKey':
       return handle(
         getApiKey().then(key => ({ configured: !!key }))

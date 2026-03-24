@@ -89,6 +89,282 @@
   }
 
   // ================================================================
+  //  CSV EXPORT HELPERS
+  // ================================================================
+  function generateCSV(data) {
+    if (!data || !data.length) return '';
+    const headers = Object.keys(data[0]);
+    const rows = data.map(item =>
+      headers.map(h => {
+        let val = item[h] || '';
+        val = String(val).replace(/"/g, '""');
+        return `"${val}"`;
+      }).join(',')
+    );
+    return [headers.join(','), ...rows].join('\n');
+  }
+
+  function downloadCSV(csv, filename) {
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportAllData() {
+    renderLoading('Exportando datos...');
+
+    chrome.runtime.sendMessage({ action: 'exportAll' }, (resp) => {
+      if (!resp || !resp.ok) {
+        showToast('Error al exportar', 'error');
+        restoreView();
+        return;
+      }
+
+      const { contactos, estudiantes, oportunidades } = resp.data;
+      const timestamp = new Date().toISOString().slice(0, 10);
+
+      if (contactos?.length) downloadCSV(generateCSV(contactos), `contactos_${timestamp}.csv`);
+      if (estudiantes?.length) downloadCSV(generateCSV(estudiantes), `estudiantes_${timestamp}.csv`);
+      if (oportunidades?.length) downloadCSV(generateCSV(oportunidades), `oportunidades_${timestamp}.csv`);
+
+      showToast(`Exportados: ${contactos?.length || 0} contactos, ${estudiantes?.length || 0} estudiantes, ${oportunidades?.length || 0} oportunidades`, 'success');
+      restoreView();
+    });
+  }
+
+  function exportConversation() {
+    renderLoading('Exportando conversación...');
+
+    chrome.runtime.sendMessage({ action: 'exportConversation' }, (resp) => {
+      if (!resp || !resp.ok || !resp.data?.length) {
+        showToast('No se pudieron extraer mensajes', 'error');
+        restoreView();
+        return;
+      }
+
+      const messages = resp.data;
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const contactName = currentResult?.data?.Nombres || currentResult?.data?.Primer_nombre || currentPhone || 'chat';
+
+      // Generate text format
+      const text = messages.map(m => {
+        const dir = m.direction === 'sent' ? '→ Yo' : '← Contacto';
+        return `[${m.time}] ${dir}: ${m.text}`;
+      }).join('\n');
+
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `chat_${contactName.replace(/\s+/g, '_')}_${timestamp}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast(`${messages.length} mensajes exportados`, 'success');
+      restoreView();
+    });
+  }
+
+  function restoreView() {
+    if (currentResult) {
+      if (currentResult.type === 'estudiante') renderEstudiante(currentResult);
+      else if (currentResult.type === 'contacto') renderContacto(currentResult.data || currentResult);
+      else if (currentResult.type === 'oportunidad') renderOportunidad(currentResult);
+      else renderNoConversation();
+    } else {
+      renderNoConversation();
+    }
+  }
+
+  function bindExportButtons() {
+    document.getElementById('q10-export-data')?.addEventListener('click', exportAllData);
+    document.getElementById('q10-export-chat')?.addEventListener('click', exportConversation);
+  }
+
+  // ================================================================
+  //  TAGS SYSTEM
+  // ================================================================
+  const AVAILABLE_TAGS = [
+    { id: 'interested', label: 'Interesado', color: '#3B82F6', bg: '#EFF6FF' },
+    { id: 'enrolled', label: 'Matriculado', color: '#10B981', bg: '#ECFDF5' },
+    { id: 'active', label: 'Activo', color: '#059669', bg: '#D1FAE5' },
+    { id: 'inactive', label: 'Inactivo', color: '#6B7280', bg: '#F3F4F6' },
+    { id: 'overdue', label: 'Mora', color: '#EF4444', bg: '#FEF2F2' },
+    { id: 'vip', label: 'VIP', color: '#F59E0B', bg: '#FFFBEB' },
+    { id: 'referral', label: 'Referido', color: '#8B5CF6', bg: '#F5F3FF' },
+    { id: 'prospect', label: 'Prospecto', color: '#EC4899', bg: '#FDF2F8' },
+  ];
+
+  async function getContactTags(contactId) {
+    return new Promise(resolve => {
+      chrome.storage.local.get(['tags_' + contactId], (result) => {
+        resolve(result['tags_' + contactId] || []);
+      });
+    });
+  }
+
+  async function setContactTags(contactId, tags) {
+    return new Promise(resolve => {
+      chrome.storage.local.set({ ['tags_' + contactId]: tags }, resolve);
+    });
+  }
+
+  function renderTagsSection(contactId, existingTags) {
+    return `
+      <div class="q10-tags-section">
+        <div class="q10-tags-header">
+          <span class="q10-tags-title">${icon('clipboard')} Etiquetas</span>
+        </div>
+        <div class="q10-tags-list" id="q10-tags-${contactId}">
+          ${AVAILABLE_TAGS.map(t => {
+            const active = existingTags.includes(t.id);
+            return `<button class="q10-tag ${active ? 'q10-tag-active' : ''}" 
+              data-tag="${t.id}" data-contact="${contactId}"
+              style="--tag-color: ${t.color}; --tag-bg: ${t.bg}">
+              ${t.label}
+            </button>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // ================================================================
+  //  NOTES SYSTEM
+  // ================================================================
+  async function getContactNotes(contactId) {
+    return new Promise(resolve => {
+      chrome.storage.local.get(['notes_' + contactId], (result) => {
+        resolve(result['notes_' + contactId] || []);
+      });
+    });
+  }
+
+  async function addContactNote(contactId, text) {
+    const notes = await getContactNotes(contactId);
+    notes.unshift({
+      id: Date.now().toString(),
+      text,
+      date: new Date().toLocaleDateString('es-GT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      timestamp: Date.now()
+    });
+    if (notes.length > 20) notes.pop();
+    return new Promise(resolve => {
+      chrome.storage.local.set({ ['notes_' + contactId]: notes }, resolve);
+    });
+  }
+
+  async function deleteContactNote(contactId, noteId) {
+    let notes = await getContactNotes(contactId);
+    notes = notes.filter(n => n.id !== noteId);
+    return new Promise(resolve => {
+      chrome.storage.local.set({ ['notes_' + contactId]: notes }, resolve);
+    });
+  }
+
+  async function renderNotesSection(contactId) {
+    const notes = await getContactNotes(contactId);
+    return `
+      <div class="q10-notes-section">
+        <div class="q10-notes-header">
+          <span class="q10-notes-title">${icon('fileText')} Notas</span>
+        </div>
+        <div class="q10-notes-input-wrap">
+          <textarea id="q10-note-input" class="q10-note-textarea" 
+            placeholder="Agregar nota..." rows="2"></textarea>
+          <button id="q10-note-add" class="q10-btn q10-btn-sm q10-btn-primary">
+            ${icon('plus')} Agregar
+          </button>
+        </div>
+        <div class="q10-notes-list" id="q10-notes-list">
+          ${notes.map(n => `
+            <div class="q10-note-card" data-note-id="${n.id}">
+              <div class="q10-note-date">${n.date}</div>
+              <div class="q10-note-text">${escapeHtml(n.text)}</div>
+              <button class="q10-note-delete" data-note-id="${n.id}" data-contact="${contactId}">✕</button>
+            </div>
+          `).join('')}
+          ${notes.length === 0 ? '<p class="q10-notes-empty">Sin notas aún</p>' : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Attach tags and notes sections + event handlers to the current view
+  async function attachTagsAndNotes(contactId) {
+    const container = document.getElementById('q10-tags-notes-container');
+    if (!container) return;
+
+    const tags = await getContactTags(contactId);
+    const tagsHtml = renderTagsSection(contactId, tags);
+    const notesHtml = await renderNotesSection(contactId);
+    container.innerHTML = tagsHtml + notesHtml;
+
+    bindTagsHandlers();
+    bindNotesHandlers(contactId);
+  }
+
+  function bindTagsHandlers() {
+    document.querySelectorAll('.q10-tag').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tagId = btn.dataset.tag;
+        const contactId = btn.dataset.contact;
+        let tags = await getContactTags(contactId);
+        if (tags.includes(tagId)) {
+          tags = tags.filter(t => t !== tagId);
+        } else {
+          tags.push(tagId);
+        }
+        await setContactTags(contactId, tags);
+        btn.classList.toggle('q10-tag-active');
+      });
+    });
+  }
+
+  function bindNotesHandlers(contactId) {
+    document.getElementById('q10-note-add')?.addEventListener('click', async () => {
+      const input = document.getElementById('q10-note-input');
+      const text = input.value.trim();
+      if (!text) return;
+      await addContactNote(contactId, text);
+      input.value = '';
+      // Re-render notes section
+      const notesHtml = await renderNotesSection(contactId);
+      const notesSection = document.querySelector('.q10-notes-section');
+      if (notesSection) {
+        notesSection.outerHTML = notesHtml;
+        bindNotesHandlers(contactId);
+      }
+    });
+
+    document.querySelectorAll('.q10-note-delete').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const noteId = btn.dataset.noteId;
+        const cId = btn.dataset.contact;
+        await deleteContactNote(cId, noteId);
+        const card = btn.closest('.q10-note-card');
+        if (card) card.remove();
+        // Show empty state if no more notes
+        const list = document.getElementById('q10-notes-list');
+        if (list && list.querySelectorAll('.q10-note-card').length === 0) {
+          list.innerHTML = '<p class="q10-notes-empty">Sin notas aún</p>';
+        }
+      });
+    });
+  }
+
+
+  // ================================================================
   //  SIMPLE RENDER STATES
   // ================================================================
   function body() { return document.getElementById('q10-body'); }
@@ -278,14 +554,22 @@
         </div>
       </div>
       ${financialHtml}
+      <div id="q10-tags-notes-container"></div>
     `;
+
+    // Attach tags & notes (async, fills container after render)
+    const contactIdEst = d.Codigo || 'unknown';
+    attachTagsAndNotes(contactIdEst);
 
     showActions(`
       <button class="q10-btn q10-btn-cta" id="q10-gen-cobro">${icon('dollar','q10-btn-icon')} Generar Cobro</button>
       <button class="q10-btn q10-btn-success" id="q10-log-activity">${icon('clipboard','q10-btn-icon')} Registrar Actividad</button>
       <button class="q10-btn q10-btn-outline" id="q10-refresh-fin">${icon('refresh','q10-btn-icon')} Actualizar Financiero</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-data">${icon('clipboard','q10-btn-icon')} Exportar Datos</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-chat">${icon('fileText','q10-btn-icon')} Exportar Chat</button>
       <button class="q10-btn q10-btn-outline" id="q10-view-q10">${icon('externalLink','q10-btn-icon')} Ver en Q10</button>
     `);
+    bindExportButtons();
 
     document.getElementById('q10-gen-cobro').addEventListener('click', () => showGenerarCobroModal(d));
     document.getElementById('q10-log-activity').addEventListener('click', () => showCreateActividadModal(d));
@@ -361,13 +645,21 @@
       </div>
       ${negociosHtml}
       ${actividadesHtml}
+      <div id="q10-tags-notes-container"></div>
     `;
+
+    // Attach tags & notes
+    const contactIdOp = d.Codigo || d.Codigo_contacto || 'unknown';
+    attachTagsAndNotes(contactIdOp);
 
     showActions(`
       <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>
       <button class="q10-btn q10-btn-success" id="q10-log-activity">${icon('clipboard','q10-btn-icon')} Registrar Actividad</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-data">${icon('clipboard','q10-btn-icon')} Exportar Datos</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-chat">${icon('fileText','q10-btn-icon')} Exportar Chat</button>
       <button class="q10-btn q10-btn-outline" id="q10-view-q10">${icon('externalLink','q10-btn-icon')} Ver en Q10</button>
     `);
+    bindExportButtons();
 
     document.getElementById('q10-start-enrollment').addEventListener('click', () => {
       startEnrollmentWizard(d.Celular || d.Telefono || currentPhone, d);
@@ -393,14 +685,22 @@
           <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${data.Telefono||'—'}</span></div>
           <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${data.Celular||'—'}</span></div>
         </div>
-      </div>`;
+      </div>
+      <div id="q10-tags-notes-container"></div>`;
+
+    // Attach tags & notes
+    const contactIdCt = data.Codigo || data.Codigo_contacto || 'unknown';
+    attachTagsAndNotes(contactIdCt);
 
     showActions(`
       <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>
       <button class="q10-btn q10-btn-primary" id="q10-create-lead">${icon('plus','q10-btn-icon')} Crear Oportunidad</button>
       <button class="q10-btn q10-btn-success" id="q10-log-activity">${icon('clipboard','q10-btn-icon')} Registrar Actividad</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-data">${icon('clipboard','q10-btn-icon')} Exportar Datos</button>
+      <button class="q10-btn q10-btn-secondary" id="q10-export-chat">${icon('fileText','q10-btn-icon')} Exportar Chat</button>
       <button class="q10-btn q10-btn-outline" id="q10-view-q10">${icon('externalLink','q10-btn-icon')} Ver en Q10</button>
     `);
+    bindExportButtons();
 
     document.getElementById('q10-start-enrollment').addEventListener('click', () => {
       startEnrollmentWizard(data.Celular || data.Telefono || currentPhone, data);

@@ -342,6 +342,48 @@
     log(`Content script ready (v${VERSION} — Inject bridge + DOM fallback).`);
   }
 
+
+  // ================================================================
+  //  CONVERSATION EXPORT (messages from current chat)
+  // ================================================================
+  function extractConversationMessages() {
+    const messages = [];
+    const msgElements = document.querySelectorAll('[data-testid="msg-container"], .message-in, .message-out');
+
+    msgElements.forEach(el => {
+      const isOutgoing = el.classList.contains('message-out') || !!el.closest('.message-out');
+      const textEl = el.querySelector('.selectable-text');
+      const text = textEl?.innerText || '';
+      const timeEl = el.querySelector('[data-testid="msg-meta"] span, .msg-time');
+      const time = timeEl?.textContent || '';
+      const prePlain = el.querySelector('[data-pre-plain-text]');
+      const meta = prePlain?.getAttribute('data-pre-plain-text') || '';
+
+      if (text.trim()) {
+        messages.push({
+          direction: isOutgoing ? 'sent' : 'received',
+          text: text.trim(),
+          time: time.trim(),
+          meta: meta.trim()
+        });
+      }
+    });
+
+    return messages;
+  }
+
+  // Listen for export request from sidepanel via service worker
+  chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    if (msg.action === 'exportConversation') {
+      try {
+        const messages = extractConversationMessages();
+        sendResponse({ ok: true, data: messages });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message });
+      }
+      return true;
+    }
+  });
   // Start when DOM is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

@@ -623,3 +623,143 @@ body {
   .q10-step-line { width: 14px; }
   .q10-step-label { max-width: 48px; font-size: 9px; }
 }
+
+/* ============================================================
+   MESSAGE TEMPLATES
+   ============================================================ */
+
+.q10-templates-list { display: flex; flex-direction: column; gap: 10px; }
+
+.q10-template-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.q10-template-card:hover { border-color: #0EA5E9; background: #f0f9ff; }
+
+.q10-template-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.q10-template-icon { font-size: 18px; }
+.q10-template-name { font-weight: 600; font-size: 13px; flex: 1; }
+
+.q10-template-category {
+  font-size: 10px;
+  background: #e9ecef;
+  color: #6c757d;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+
+.q10-template-preview {
+  font-size: 12px;
+  color: #6c757d;
+  line-height: 1.4;
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+}
+
+.q10-template-actions { display: flex; gap: 8px; }
+
+.q10-btn-sm { padding: 6px 12px; font-size: 12px; }
+
+.q10-btn-secondary {
+  background: #F1F5F9;
+  color: #334155;
+  border: 1px solid #CBD5E1;
+}
+.q10-btn-secondary:hover:not(:disabled) {
+  background: #E2E8F0;
+  border-color: #94A3B8;
+}
+
+.q10-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.q10-section-header h3 {
+  font-size: 15px;
+  font-weight: 700;
+  flex: 1;
+  margin: 0;
+}
+
+.q10-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #0EA5E9;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+}
+
+.q10-back-btn:hover { background: #f0f9ff; }
+
+.q10-back-btn span { width: 14px; height: 14px; }
+
+/* ============================================================
+   TAGS & NOTES
+   ============================================================ */
+
+/* Tags */
+.q10-tags-section { margin: 12px 0; }
+.q10-tags-header { margin-bottom: 8px; }
+.q10-tags-title { font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; }
+.q10-tags-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.q10-tag {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1.5px solid var(--tag-color, #d1d5db);
+  background: transparent;
+  color: var(--tag-color, #6b7280);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.q10-tag:hover { background: var(--tag-bg, #f3f4f6); }
+.q10-tag-active {
+  background: var(--tag-bg, #f3f4f6) !important;
+  border-color: var(--tag-color, #6b7280);
+  box-shadow: 0 0 0 1px var(--tag-color, #6b7280);
+}
+
+/* Notes */
+.q10-notes-section { margin: 16px 0; }
+.q10-notes-header { margin-bottom: 8px; }
+.q10-notes-title { font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.05em; }
+.q10-notes-input-wrap { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-start; }
+.q10-note-textarea {
+  flex: 1; padding: 8px 12px; border: 1.5px solid #e5e7eb; border-radius: 8px;
+  font-size: 13px; font-family: inherit; resize: vertical; min-height: 36px;
+  outline: none; transition: border-color 0.2s;
+}
+.q10-note-textarea:focus { border-color: #0EA5E9; }
+.q10-btn-sm { padding: 6px 12px; font-size: 12px; }
+.q10-notes-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+.q10-note-card {
+  background: #fefce8; border: 1px solid #fef08a; border-radius: 8px;
+  padding: 8px 12px; position: relative;
+}
+.q10-note-date { font-size: 10px; color: #92400e; font-weight: 600; margin-bottom: 2px; }
+.q10-note-text { font-size: 12px; color: #451a03; line-height: 1.4; white-space: pre-wrap; }
+.q10-note-delete {
+  position: absolute; top: 6px; right: 8px; background: none; border: none;
+  color: #d97706; cursor: pointer; font-size: 12px; padding: 2px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.q10-note-card:hover .q10-note-delete { opacity: 1; }
+.q10-notes-empty { font-size: 12px; color: #9ca3af; text-align: center; padding: 8px; }
