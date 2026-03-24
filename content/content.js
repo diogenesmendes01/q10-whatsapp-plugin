@@ -1,8 +1,8 @@
 /* ============================================================
    Q10 CRM — Content Script (WhatsApp Web)
-   Lightweight: only detects phone + toggle button.
+   Detects phone number OR contact name from conversation.
    Panel UI lives in Chrome Side Panel.
-   v2.1 — Improved phone detection for saved contacts
+   v2.2 — Name + Phone detection
    ============================================================ */
 
 (function () {
@@ -24,94 +24,81 @@
       chrome.runtime.sendMessage({ action: 'openSidePanel' });
     });
     document.body.appendChild(btn);
+    console.log('[Q10 CRM] Toggle button created');
   }
 
   // ================================================================
-  //  PHONE DETECTION FROM WHATSAPP WEB DOM
+  //  DETECTION HELPERS
   // ================================================================
   function isPhoneNumber(text) {
     const cleaned = (text || '').replace(/[\s\-\(\)\u200e\u200f\u202a\u202c]/g, '');
     return /^\+?\d{10,15}$/.test(cleaned) ? cleaned : null;
   }
 
-  function extractPhoneFromDOM() {
-    // Strategy 1: Header title (unsaved contacts show phone directly)
-    const headerSelectors = [
-      '#main header span[title]',
-      '#main header span[dir="auto"]',
-      'header span[title]',
-      'header ._amig span',
-      'header [data-testid="conversation-info-header"] span',
-    ];
-    for (const sel of headerSelectors) {
-      const elements = document.querySelectorAll(sel);
-      for (const el of elements) {
-        const title = el.getAttribute('title') || '';
-        const text = el.textContent || '';
-        const phone = isPhoneNumber(title) || isPhoneNumber(text);
-        if (phone) return phone;
-      }
+  function isContactName(text) {
+    const trimmed = (text || '').trim();
+    // Skip empty, very short, status messages, dates, etc.
+    if (!trimmed || trimmed.length < 2 || trimmed.length > 60) return null;
+    // Skip if it's a phone number
+    if (isPhoneNumber(trimmed)) return null;
+    // Skip common WhatsApp UI text
+    const skipList = ['click here', 'type a message', 'search', 'chats', 'status', 'communities',
+      'new chat', 'disappearing messages', 'default', 'haz clic', 'escribe', 'buscar',
+      'en línea', 'online', 'typing', 'escribiendo', 'last seen', 'últ. vez',
+      'today', 'yesterday', 'hoy', 'ayer', 'encrypted', 'cifrado'];
+    if (skipList.some(s => trimmed.toLowerCase().includes(s))) return null;
+    // Must have at least one letter
+    if (!/[a-zA-ZáéíóúñÁÉÍÓÚÑüÜ]/.test(trimmed)) return null;
+    return trimmed;
+  }
+
+  // ================================================================
+  //  EXTRACT CONTACT INFO FROM DOM
+  // ================================================================
+  function extractContactFromDOM() {
+    // --- Try to get phone first ---
+    
+    // Strategy 1: Header title (unsaved contacts)
+    const headerEl = document.querySelector('#main header span[title]');
+    if (headerEl) {
+      const title = headerEl.getAttribute('title') || '';
+      const phone = isPhoneNumber(title);
+      if (phone) return { type: 'phone', value: phone };
     }
 
-    // Strategy 2: Look for phone in the conversation panel's data attributes
-    // WhatsApp stores the chat ID in data-id attributes (format: number@c.us)
-    const chatElements = document.querySelectorAll('#main [data-id], #main [data-testid] [data-id]');
-    for (const el of chatElements) {
+    // Strategy 2: data-id from messages (has phone in format: number@c.us)
+    const msgContainers = document.querySelectorAll('#main [data-id]');
+    for (const el of msgContainers) {
       const dataId = el.getAttribute('data-id') || '';
       const match = dataId.match(/(\d{10,15})@/);
-      if (match) return match[1];
+      if (match) return { type: 'phone', value: match[1] };
     }
 
-    // Strategy 3: Message bubbles contain sender info with phone
-    const msgSelectors = [
-      '[data-testid="msg-container"] [data-pre-plain-text]',
-      '.message-in [data-pre-plain-text]',
-    ];
-    for (const sel of msgSelectors) {
-      const el = document.querySelector(sel);
-      if (el) {
-        const attr = el.getAttribute('data-pre-plain-text') || '';
-        const match = attr.match(/(\+?\d[\d\s\-]{9,})/);
-        if (match) {
-          const phone = isPhoneNumber(match[1]);
-          if (phone) return phone;
-        }
-      }
-    }
-
-    // Strategy 4: Contact info drawer (when user clicks contact name)
-    const drawerSelectors = [
-      '[data-testid="contact-info-drawer"] span[title]',
-      '[data-testid="contact-info-drawer"] span[dir="auto"]',
-      'section span[title]',
-      '[data-testid="chat-info-drawer"] span',
-    ];
-    for (const sel of drawerSelectors) {
-      const elements = document.querySelectorAll(sel);
-      for (const el of elements) {
-        const title = el.getAttribute('title') || '';
-        const text = el.textContent || '';
-        const phone = isPhoneNumber(title) || isPhoneNumber(text);
-        if (phone) return phone;
-      }
-    }
-
-    // Strategy 5: URL-based detection (WhatsApp Web URL sometimes has phone)
-    const urlMatch = window.location.hash.match(/(\d{10,15})/);
-    if (urlMatch) return urlMatch[1];
-
-    // Strategy 6: Search all spans in the header area for phone-like text
+    // Strategy 3: All spans in header for phone-like text
     const mainHeader = document.querySelector('#main header');
     if (mainHeader) {
-      const allSpans = mainHeader.querySelectorAll('span');
-      for (const span of allSpans) {
-        const phone = isPhoneNumber(span.textContent);
-        if (phone) return phone;
-        const title = span.getAttribute('title');
-        if (title) {
-          const p = isPhoneNumber(title);
-          if (p) return p;
-        }
+      const spans = mainHeader.querySelectorAll('span');
+      for (const span of spans) {
+        const phone = isPhoneNumber(span.textContent) || isPhoneNumber(span.getAttribute('title'));
+        if (phone) return { type: 'phone', value: phone };
+      }
+    }
+
+    // --- If no phone found, get the contact name ---
+    
+    // Strategy 4: Header title is a saved contact name
+    if (headerEl) {
+      const title = headerEl.getAttribute('title') || '';
+      const name = isContactName(title);
+      if (name) return { type: 'name', value: name };
+    }
+
+    // Strategy 5: First span with dir="auto" in header (contact name)
+    if (mainHeader) {
+      const autoSpan = mainHeader.querySelector('span[dir="auto"]');
+      if (autoSpan) {
+        const name = isContactName(autoSpan.textContent);
+        if (name) return { type: 'name', value: name };
       }
     }
 
@@ -122,23 +109,29 @@
   //  OBSERVE CONVERSATION CHANGES
   // ================================================================
   let observerDebounce = null;
-  let lastDetectedPhone = null;
+  let lastDetected = null; // { type, value }
 
   function onConversationChange() {
     clearTimeout(observerDebounce);
     observerDebounce = setTimeout(() => {
-      const phone = extractPhoneFromDOM();
-      if (phone && phone !== lastDetectedPhone) {
-        lastDetectedPhone = phone;
-        console.log('[Q10 CRM] Phone detected:', phone);
-        // Notify service worker of phone change
-        chrome.runtime.sendMessage({ action: 'phoneChanged', phone });
-        // Update toggle button state
+      const contact = extractContactFromDOM();
+      const key = contact ? `${contact.type}:${contact.value}` : null;
+      const lastKey = lastDetected ? `${lastDetected.type}:${lastDetected.value}` : null;
+
+      if (key && key !== lastKey) {
+        lastDetected = contact;
+        console.log(`[Q10 CRM] Detected ${contact.type}: ${contact.value}`);
+        // Notify service worker
+        if (contact.type === 'phone') {
+          chrome.runtime.sendMessage({ action: 'phoneChanged', phone: contact.value, contactName: null });
+        } else {
+          chrome.runtime.sendMessage({ action: 'phoneChanged', phone: null, contactName: contact.value });
+        }
         const btn = document.getElementById('q10-toggle-btn');
         if (btn) btn.classList.add('q10-has-data');
-      } else if (!phone && lastDetectedPhone) {
-        lastDetectedPhone = null;
-        chrome.runtime.sendMessage({ action: 'phoneChanged', phone: null });
+      } else if (!contact && lastDetected) {
+        lastDetected = null;
+        chrome.runtime.sendMessage({ action: 'phoneChanged', phone: null, contactName: null });
         const btn = document.getElementById('q10-toggle-btn');
         if (btn) btn.classList.remove('q10-has-data');
       }
@@ -149,20 +142,17 @@
   //  INIT
   // ================================================================
   function init() {
+    console.log('[Q10 CRM] Initializing content script v2.2...');
     createToggleButton();
 
-    // Observe DOM changes for conversation switches
     const observer = new MutationObserver(() => onConversationChange());
     const watchTarget = document.getElementById('app') || document.body;
     observer.observe(watchTarget, { childList: true, subtree: true });
 
-    // Also detect on click (conversation switch via click)
     document.addEventListener('click', () => setTimeout(onConversationChange, 300), true);
-
-    // Initial check
     setTimeout(onConversationChange, 1000);
 
-    console.log('[Q10 CRM] Content script loaded (v2.1 — Enhanced phone detection)');
+    console.log('[Q10 CRM] Content script ready (v2.2 — Name + Phone detection)');
   }
 
   if (document.readyState === 'loading') {

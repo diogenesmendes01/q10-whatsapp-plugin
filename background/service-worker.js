@@ -1,6 +1,7 @@
 /* ============================================================
    Q10 CRM — Background Service Worker
    Handles API calls + Side Panel management + phone relay.
+   v2.2 — Name + Phone search
    ============================================================ */
 
 const API_BASE = 'https://geniusidiomas.com/api/q10';
@@ -30,7 +31,6 @@ function setCache(key, data) {
 
 // ---------- Side Panel setup ----------
 
-// Open side panel when extension icon is clicked
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 // ---------- API helpers ----------
@@ -42,7 +42,6 @@ async function getApiKey() {
 
 async function apiGet(endpoint, params = {}, opts = {}) {
   const apiKey = await getApiKey();
-  // API key is optional in mock mode
 
   const key = cacheKey(endpoint, params);
   const ttl = opts.shortCache ? CACHE_TTL_SHORT : CACHE_TTL;
@@ -74,7 +73,6 @@ async function apiGet(endpoint, params = {}, opts = {}) {
 
 async function apiPost(endpoint, body) {
   const apiKey = await getApiKey();
-  // API key is optional in mock mode
 
   const url = `${API_BASE}${endpoint}`;
   const resp = await fetch(url, {
@@ -112,6 +110,38 @@ function phoneMatches(contactPhone, searchPhone) {
   return a.endsWith(b) || b.endsWith(a) || a === b;
 }
 
+// ---------- Name matching ----------
+
+function nameMatches(record, searchName) {
+  if (!searchName) return false;
+  const search = searchName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  // Build full name from record fields
+  const parts = [
+    record.Nombres, record.Apellidos,
+    record.Primer_nombre, record.Segundo_nombre,
+    record.Primer_apellido, record.Segundo_apellido,
+    record.Nombre, record.nombre
+  ].filter(Boolean);
+  
+  const fullName = parts.join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  
+  if (!fullName) return false;
+  
+  // Exact match
+  if (fullName === search) return true;
+  
+  // Full name contains search or search contains full name
+  if (fullName.includes(search) || search.includes(fullName)) return true;
+  
+  // Match by parts: all search words must appear in the full name
+  const searchWords = search.split(/\s+/).filter(w => w.length > 1);
+  const nameWords = fullName.split(/\s+/);
+  const allMatch = searchWords.every(sw => nameWords.some(nw => nw.includes(sw) || sw.includes(nw)));
+  
+  return allMatch && searchWords.length > 0;
+}
+
 // ---------- Search logic ----------
 
 async function searchByPhone(phone) {
@@ -119,16 +149,34 @@ async function searchByPhone(phone) {
   if (!normalized || normalized.length < 8) {
     throw new Error('Número de telefone inválido.');
   }
+  return searchContacts({ phone: normalized });
+}
 
-  const results = { type: 'unknown', phone: normalized, data: null };
+async function searchByName(name) {
+  if (!name || name.length < 2) {
+    throw new Error('Nombre demasiado corto.');
+  }
+  return searchContacts({ name });
+}
+
+async function searchContacts({ phone, name }) {
+  const results = { type: 'unknown', phone: phone || null, name: name || null, data: null };
+
+  const matchFn = (record) => {
+    if (phone) {
+      return phoneMatches(record.Telefono, phone) || phoneMatches(record.Celular, phone);
+    }
+    if (name) {
+      return nameMatches(record, name);
+    }
+    return false;
+  };
 
   // 1. Search estudiantes
   try {
     const estudiantes = await apiGet('/estudiantes');
     if (Array.isArray(estudiantes)) {
-      const match = estudiantes.find(e =>
-        phoneMatches(e.Telefono, normalized) || phoneMatches(e.Celular, normalized)
-      );
+      const match = estudiantes.find(matchFn);
       if (match) {
         results.type = 'estudiante';
         results.data = match;
@@ -162,9 +210,7 @@ async function searchByPhone(phone) {
   try {
     const contactos = await apiGet('/contactos');
     if (Array.isArray(contactos)) {
-      const match = contactos.find(c =>
-        phoneMatches(c.Telefono, normalized) || phoneMatches(c.Celular, normalized)
-      );
+      const match = contactos.find(matchFn);
       if (match) {
         results.type = 'contacto';
         results.data = match;
@@ -179,9 +225,7 @@ async function searchByPhone(phone) {
   try {
     const oportunidades = await apiGet('/oportunidades');
     if (Array.isArray(oportunidades)) {
-      const match = oportunidades.find(o =>
-        phoneMatches(o.Telefono, normalized) || phoneMatches(o.Celular, normalized)
-      );
+      const match = oportunidades.find(matchFn);
       if (match) {
         results.type = 'oportunidad';
         results.data = match;
@@ -259,7 +303,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   };
 
   switch (msg.action) {
-    // --- Side Panel ---
     case 'openSidePanel':
       (async () => {
         try {
@@ -273,14 +316,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return true;
 
     case 'phoneChanged':
-      // Store phone in session storage so side panel can read it
-      chrome.storage.session.set({ currentPhone: msg.phone || null });
+      // Store both phone and name in session storage
+      chrome.storage.session.set({
+        currentPhone: msg.phone || null,
+        currentContactName: msg.contactName || null
+      });
       sendResponse({ ok: true });
       return false;
 
-    // --- API calls ---
     case 'searchPhone':
       return handle(searchByPhone(msg.phone));
+
+    case 'searchName':
+      return handle(searchByName(msg.name));
 
     case 'fetchCatalogs':
       return handle(fetchCatalogs());
@@ -288,7 +336,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'fetchStudentFinancials':
       return handle(fetchStudentFinancials(msg.codigoEstudiante));
 
-    // --- POST actions ---
     case 'createContacto':
       return handle(apiPost('/contactos', msg.body));
 
@@ -310,7 +357,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'createActividad':
       return handle(apiPost('/actividades', msg.body));
 
-    // --- Utility ---
     case 'checkApiKey':
       return handle(
         getApiKey().then(key => ({ configured: !!key }))

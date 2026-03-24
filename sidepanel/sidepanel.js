@@ -963,10 +963,12 @@
   //  LISTEN FOR PHONE CHANGES (via storage)
   // ================================================================
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'session' && changes.currentPhone) {
+    if (areaName !== 'session') return;
+    if (wizardState) return; // Don't interrupt wizard
+    
+    if (changes.currentPhone) {
       const newPhone = changes.currentPhone.newValue;
       if (newPhone && newPhone !== currentPhone) {
-        if (wizardState) return; // Don't interrupt wizard
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
             searchPhone(newPhone);
@@ -974,9 +976,39 @@
             renderNoApiKey();
           }
         });
-      } else if (!newPhone) {
+      } else if (!newPhone && !changes.currentContactName) {
         currentPhone = null;
-        if (!wizardState) renderNoConversation();
+        renderNoConversation();
+      }
+    }
+    
+    if (changes.currentContactName) {
+      const newName = changes.currentContactName.newValue;
+      if (newName) {
+        chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
+          if (resp && resp.ok && resp.data?.configured) {
+            renderLoading('Buscando: ' + newName + '...');
+            chrome.runtime.sendMessage({ action: 'searchName', name: newName }, (searchResp) => {
+              if (searchResp && searchResp.ok) {
+                currentResult = searchResp.data;
+                currentPhone = searchResp.data?.phone || null;
+                if (searchResp.data.type === 'unknown') {
+                  renderUnknown(newName);
+                } else if (searchResp.data.type === 'estudiante') {
+                  renderEstudiante(searchResp.data);
+                } else if (searchResp.data.type === 'contacto') {
+                  renderContacto(searchResp.data);
+                } else if (searchResp.data.type === 'oportunidad') {
+                  renderOportunidad(searchResp.data);
+                }
+              } else {
+                renderUnknown(newName);
+              }
+            });
+          }
+        });
+      } else if (!changes.currentPhone) {
+        renderNoConversation();
       }
     }
   });
@@ -993,9 +1025,21 @@
       }
 
       // Check if there's already a detected phone
-      chrome.storage.session.get(['currentPhone'], (result) => {
+      chrome.storage.session.get(['currentPhone', 'currentContactName'], (result) => {
         if (result.currentPhone) {
           searchPhone(result.currentPhone);
+        } else if (result.currentContactName) {
+          renderLoading('Buscando: ' + result.currentContactName + '...');
+          chrome.runtime.sendMessage({ action: 'searchName', name: result.currentContactName }, (searchResp) => {
+            if (searchResp && searchResp.ok && searchResp.data.type !== 'unknown') {
+              currentResult = searchResp.data;
+              if (searchResp.data.type === 'estudiante') renderEstudiante(searchResp.data);
+              else if (searchResp.data.type === 'contacto') renderContacto(searchResp.data);
+              else if (searchResp.data.type === 'oportunidad') renderOportunidad(searchResp.data);
+            } else {
+              renderUnknown(result.currentContactName);
+            }
+          });
         } else {
           renderNoConversation();
         }
