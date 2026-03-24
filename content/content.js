@@ -190,8 +190,8 @@
     // --- Try phone first ---
     const headerEl = document.querySelector('#main header span');
     if (headerEl) {
-      const title = headerEl.getAttribute('title') || '';
-      const phone = isPhoneNumber(title);
+      const headerText = (headerEl.textContent || '').trim();
+      const phone = isPhoneNumber(headerText);
       if (phone) return { phone, name: null, isGroup: false };
     }
 
@@ -215,8 +215,8 @@
 
     // --- If no phone, try contact name ---
     if (headerEl) {
-      const title = headerEl.getAttribute('title') || '';
-      const name = isContactName(title);
+      const headerText2 = (headerEl.textContent || '').trim();
+      const name = isContactName(headerText2);
       if (name) {
         // Check if it's a group by looking for group indicators
         const isGroup = !!mainHeader?.querySelector('span[data-icon="default-group"]') ||
@@ -320,15 +320,9 @@
     // 4. Setup polling to request chat data from inject
     setupPolling();
 
-    // 5. Schedule DOM fallback activation if inject doesn't respond
-    setTimeout(() => {
-      if (!receivedInjectData) {
-        warn(`No data from inject.js after ${INJECT_TIMEOUT_MS}ms.`);
-        activateDOMFallback();
-      } else {
-        log('inject.js is responding, DOM fallback not needed.');
-      }
-    }, INJECT_TIMEOUT_MS);
+    // 5. Activate DOM fallback immediately (runs in parallel with inject)
+    // If inject starts responding, DOM fallback will be deactivated
+    activateDOMFallback();
 
     // 6. If inject starts responding later, deactivate DOM fallback
     window.addEventListener('message', (event) => {
