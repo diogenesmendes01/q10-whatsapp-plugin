@@ -37,12 +37,12 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => 
 
 async function getApiKey() {
   const result = await chrome.storage.sync.get(['q10ApiKey']);
-  return result.q10ApiKey || null;
+  return result.q10ApiKey || 'mock-demo';
 }
 
 async function apiGet(endpoint, params = {}, opts = {}) {
   const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API key não configurada. Acesse as configurações da extensão.');
+  // API key is optional in mock mode
 
   const key = cacheKey(endpoint, params);
   const ttl = opts.shortCache ? CACHE_TTL_SHORT : CACHE_TTL;
@@ -74,7 +74,7 @@ async function apiGet(endpoint, params = {}, opts = {}) {
 
 async function apiPost(endpoint, body) {
   const apiKey = await getApiKey();
-  if (!apiKey) throw new Error('API key não configurada.');
+  // API key is optional in mock mode
 
   const url = `${API_BASE}${endpoint}`;
   const resp = await fetch(url, {
