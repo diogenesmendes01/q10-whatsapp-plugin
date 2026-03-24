@@ -798,7 +798,28 @@
           <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${pf.Segundo_apellido||''}" placeholder="Segundo apellido"></div>
           <div class="q10-form-group"><label class="q10-form-label">Número de Identificación</label><input class="q10-form-input" id="wz-docnum" value="${pf.Numero_identificacion||''}" placeholder="CPF / Cédula / Pasaporte"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${pf.Email||''}" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${wizardState.phone||''}" placeholder="+55..."></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular</label>
+            <div style="display:flex;gap:6px">
+              <select class="q10-form-input q10-country-select" id="wz-country" style="width:120px;flex-shrink:0">
+                <option value="+502">🇬🇹 +502</option>
+                <option value="+503">🇸🇻 +503</option>
+                <option value="+504">🇭🇳 +504</option>
+                <option value="+505">🇳🇮 +505</option>
+                <option value="+506">🇨🇷 +506</option>
+                <option value="+507">🇵🇦 +507</option>
+                <option value="+501">🇧🇿 +501</option>
+                <option value="+52">🇲🇽 +52</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+57">🇨🇴 +57</option>
+                <option value="+51">🇵🇪 +51</option>
+                <option value="+56">🇨🇱 +56</option>
+                <option value="+54">🇦🇷 +54</option>
+                <option value="+593">🇪🇨 +593</option>
+                <option value="+58">🇻🇪 +58</option>
+                <option value="+1">🇺🇸 +1</option>
+              </select>
+              <input class="q10-form-input" id="wz-phone" value="${wizardState.phone||''}" placeholder="Número" style="flex:1">
+            </div></div>
         `;
         break;
 
@@ -1152,7 +1173,28 @@
           <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-op-fname" value="${contactData?.Primer_nombre||''}" placeholder="Nombre"></div>
           <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-op-lname" value="${contactData?.Primer_apellido||''}" placeholder="Apellido"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${contactData?.Email||''}" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${phone||''}" placeholder="+55..."></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular</label>
+            <div style="display:flex;gap:6px">
+              <select class="q10-form-input q10-country-select" id="q10-op-country" style="width:120px;flex-shrink:0">
+                <option value="+502">🇬🇹 +502</option>
+                <option value="+503">🇸🇻 +503</option>
+                <option value="+504">🇭🇳 +504</option>
+                <option value="+505">🇳🇮 +505</option>
+                <option value="+506">🇨🇷 +506</option>
+                <option value="+507">🇵🇦 +507</option>
+                <option value="+501">🇧🇿 +501</option>
+                <option value="+52">🇲🇽 +52</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+57">🇨🇴 +57</option>
+                <option value="+51">🇵🇪 +51</option>
+                <option value="+56">🇨🇱 +56</option>
+                <option value="+54">🇦🇷 +54</option>
+                <option value="+593">🇪🇨 +593</option>
+                <option value="+58">🇻🇪 +58</option>
+                <option value="+1">🇺🇸 +1</option>
+              </select>
+              <input class="q10-form-input" id="q10-op-phone" value="${phone||''}" placeholder="Número" style="flex:1">
+            </div></div>
           <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="q10-op-obs" placeholder="Notas..."></textarea></div>
         </div>
         <div class="q10-modal-footer">
@@ -1172,7 +1214,7 @@
       const btn = document.getElementById('q10-op-submit');
       btn.disabled = true; btn.textContent = 'Creando...';
       try {
-        await sendMsg('createOportunidad', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-op-email').value.trim(), Celular: document.getElementById('q10-op-phone').value.trim(), Observaciones: document.getElementById('q10-op-obs').value.trim() } });
+        await sendMsg('createOportunidad', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-op-email').value.trim(), Celular: (document.getElementById('q10-op-country')?.value || '') + ' ' + document.getElementById('q10-op-phone').value.trim(), Observaciones: document.getElementById('q10-op-obs').value.trim() } });
         showToast('Oportunidad creada ✓', 'success');
         removeModal();
         sendMsg('clearCache').catch(() => {});
@@ -1197,7 +1239,28 @@
           <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-ct-fname" placeholder="Nombre"></div>
           <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-ct-lname" placeholder="Apellido"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55..."></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular *</label>
+            <div style="display:flex;gap:6px">
+              <select class="q10-form-input" id="q10-ct-country" style="width:120px;flex-shrink:0">
+                <option value="+502">🇬🇹 +502</option>
+                <option value="+503">🇸🇻 +503</option>
+                <option value="+504">🇭🇳 +504</option>
+                <option value="+505">🇳🇮 +505</option>
+                <option value="+506">🇨🇷 +506</option>
+                <option value="+507">🇵🇦 +507</option>
+                <option value="+501">🇧🇿 +501</option>
+                <option value="+52">🇲🇽 +52</option>
+                <option value="+55">🇧🇷 +55</option>
+                <option value="+57">🇨🇴 +57</option>
+                <option value="+51">🇵🇪 +51</option>
+                <option value="+56">🇨🇱 +56</option>
+                <option value="+54">🇦🇷 +54</option>
+                <option value="+593">🇪🇨 +593</option>
+                <option value="+58">🇻🇪 +58</option>
+                <option value="+1">🇺🇸 +1</option>
+              </select>
+              <input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="Número" style="flex:1">
+            </div></div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1216,7 +1279,7 @@
       const btn = document.getElementById('q10-ct-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
       try {
-        await sendMsg('createContacto', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-ct-email').value.trim(), Celular: document.getElementById('q10-ct-phone').value.trim() } });
+        await sendMsg('createContacto', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-ct-email').value.trim(), Celular: (document.getElementById('q10-ct-country')?.value || '') + ' ' + document.getElementById('q10-ct-phone').value.trim() } });
         showToast('Contacto registrado ✓', 'success');
         removeModal();
         sendMsg('clearCache').catch(() => {});
