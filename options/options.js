@@ -89,10 +89,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnTest.textContent = '⏳ Testando...';
     testResult.style.display = 'none';
 
-    fetch('https://api.q10.com/v1/contactos?Limit=1&Offset=1', {
+    fetch('https://geniusidiomas.com/api/q10/contacts?Limit=1&Offset=1', {
       method: 'GET',
       headers: {
-        'Ocp-Apim-Subscription-Key': key,
+        'X-Q10-Key': key,
         'Content-Type': 'application/json'
       }
     })

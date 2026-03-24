@@ -3,7 +3,7 @@
    Handles API calls + Side Panel management + phone relay.
    ============================================================ */
 
-const API_BASE = 'https://api.q10.com/v1';
+const API_BASE = 'https://geniusidiomas.com/api/q10';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CACHE_TTL_SHORT = 60 * 1000; // 1 min for financial data
 
@@ -57,7 +57,7 @@ async function apiGet(endpoint, params = {}, opts = {}) {
   const resp = await fetch(url, {
     method: 'GET',
     headers: {
-      'Ocp-Apim-Subscription-Key': apiKey,
+      'X-Q10-Key': apiKey,
       'Content-Type': 'application/json'
     }
   });
@@ -80,7 +80,7 @@ async function apiPost(endpoint, body) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
-      'Ocp-Apim-Subscription-Key': apiKey,
+      'X-Q10-Key': apiKey,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
