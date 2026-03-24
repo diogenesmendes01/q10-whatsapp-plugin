@@ -96,10 +96,8 @@ async function apiPost(endpoint, body) {
 
 function normalizePhone(raw) {
   let digits = (raw || '').replace(/\D/g, '');
-  if (digits.length >= 12 && digits.startsWith('55')) {
-    digits = digits.slice(2);
-  }
-  if (digits.startsWith('0')) digits = digits.slice(1);
+  // Remove leading 0 (local format)
+  if (digits.startsWith('0') && digits.length <= 11) digits = digits.slice(1);
   return digits;
 }
 
@@ -107,7 +105,13 @@ function phoneMatches(contactPhone, searchPhone) {
   const a = normalizePhone(contactPhone);
   const b = normalizePhone(searchPhone);
   if (!a || !b) return false;
-  return a.endsWith(b) || b.endsWith(a) || a === b;
+  // Exact match
+  if (a === b) return true;
+  // One contains the other (handles country code differences)
+  if (a.endsWith(b) || b.endsWith(a)) return true;
+  // Last 8 digits match (handles varying country code + area code formats)
+  if (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8)) return true;
+  return false;
 }
 
 // ---------- Name matching ----------

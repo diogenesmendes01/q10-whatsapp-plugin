@@ -451,10 +451,32 @@
   // ================================================================
   //  PHONE DISPLAY WIDGET
   // ================================================================
+  function formatPhone(raw) {
+    if (!raw) return '';
+    const digits = raw.replace(/\D/g, '');
+    // Brazilian number: 55 + 2 DDD + 9 digits = 13
+    if (digits.length === 13 && digits.startsWith('55')) {
+      return `+${digits.slice(0,2)} ${digits.slice(2,4)} ${digits.slice(4,9)}-${digits.slice(9)}`;
+    }
+    // Brazilian number without 9th digit: 55 + 2 DDD + 8 digits = 12
+    if (digits.length === 12 && digits.startsWith('55')) {
+      return `+${digits.slice(0,2)} ${digits.slice(2,4)} ${digits.slice(4,8)}-${digits.slice(8)}`;
+    }
+    // Guatemala: 502 + 8 digits = 11
+    if (digits.length === 11 && digits.startsWith('502')) {
+      return `+${digits.slice(0,3)} ${digits.slice(3,7)}-${digits.slice(7)}`;
+    }
+    // Generic: add + if not present
+    if (digits.length >= 10) {
+      return '+' + digits;
+    }
+    return raw;
+  }
+
   function phoneHtml(phone) {
     return `<div class="q10-phone-display">
       <span class="q10-phone-icon">${ICONS.phone}</span>
-      <span class="q10-phone-number">${phone}</span>
+      <span class="q10-phone-number">${formatPhone(phone)}</span>
     </div>`;
   }
 
