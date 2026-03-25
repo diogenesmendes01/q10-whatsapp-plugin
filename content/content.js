@@ -14,8 +14,6 @@
   const POLL_INTERVAL_MS = 2000;
   const INJECT_TIMEOUT_MS = 5000;
 
-  const LOGO_SVG = `<svg viewBox="0 0 28 28" fill="none"><rect width="28" height="28" rx="6" fill="white" fill-opacity="0.2"/><text x="14" y="20" text-anchor="middle" font-size="16" font-weight="bold" fill="white" font-family="Inter,sans-serif">Q</text></svg>`;
-
   let lastDetectedKey = null;
   let injectLoaded = false;
   let receivedInjectData = false;
@@ -108,15 +106,6 @@
       error('Failed to send message to service worker:', e);
     }
 
-    // Update button indicator
-    const btn = document.getElementById('q10-toggle-btn');
-    if (btn) {
-      if (phone || name) {
-        btn.classList.add('q10-has-data');
-      } else {
-        btn.classList.remove('q10-has-data');
-      }
-    }
   }
 
   // ================================================================
@@ -288,38 +277,12 @@
     log('DOM fallback deactivated (inject.js is providing data).');
   }
 
-  // ================================================================
-  //  TOGGLE BUTTON
-  // ================================================================
-  function createToggleButton() {
-    if (document.getElementById('q10-toggle-btn')) return;
-
-    const btn = document.createElement('button');
-    btn.className = 'q10-toggle-btn';
-    btn.id = 'q10-toggle-btn';
-    btn.title = 'Q10 CRM';
-    btn.innerHTML = `<span class="q10-toggle-icon">${LOGO_SVG}</span>`;
-
-    btn.addEventListener('click', () => {
-      try {
-        chrome.runtime.sendMessage({ action: 'openSidePanel' });
-      } catch (e) {
-        error('Failed to open side panel:', e);
-      }
-    });
-
-    document.body.appendChild(btn);
-    log('Toggle button created.');
-  }
 
   // ================================================================
   //  INIT
   // ================================================================
   function init() {
     log(`Initializing content script v${VERSION}...`);
-
-    // 1. Create UI
-    createToggleButton();
 
     // 2. Setup listener for inject.js messages (before injecting)
     setupInjectListener();
