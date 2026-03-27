@@ -384,7 +384,7 @@
   }
 
   function renderNoApiKey() {
-    // In mock/demo mode, just show no conversation
+    // API key not configured — show empty state
     renderNoConversation();
   }
 
