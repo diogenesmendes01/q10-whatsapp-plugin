@@ -1242,9 +1242,9 @@
           <div class="q10-form-group">
             <label class="q10-form-label">Gênero</label>
             <div class="q10-radio-group">
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Masculino"> Masculino</label>
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Femenino"> Feminino</label>
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Otro"> Outro</label>
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Masculino"><span>Masculino</span></label>
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Femenino"><span>Feminino</span></label>
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Otro"><span>Outro</span></label>
             </div>
           </div>
 
@@ -1286,7 +1286,8 @@
             </div>
             <div class="q10-form-group">
               <label class="q10-form-label">Observações</label>
-              <input class="q10-form-input" id="q10-ct-obs" placeholder="Notas adicionais...">
+              <textarea class="q10-form-input q10-form-textarea" id="q10-ct-obs" placeholder="Notas adicionais..." maxlength="200" rows="3" style="resize:none;font-size:13px"></textarea>
+              <div style="text-align:right;font-size:11px;color:#9CA3AF;margin-top:2px"><span id="q10-ct-obs-count">0</span>/200</div>
             </div>
           </div>
 
@@ -1301,14 +1302,36 @@
     overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
     overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+    // Obs character counter
+    const obsEl = document.getElementById('q10-ct-obs');
+    const obsCount = document.getElementById('q10-ct-obs-count');
+    obsEl.addEventListener('input', () => { obsCount.textContent = obsEl.value.length; });
+
+    // Form validation helper
+    function markError(id, msg) {
+      const el = document.getElementById(id);
+      if (el) { el.style.borderColor = '#EF4444'; el.focus(); }
+      showToast(msg, 'error');
+    }
+    function clearErrors() {
+      ['q10-ct-fname','q10-ct-lname','q10-ct-email','q10-ct-phone'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.borderColor = '';
+      });
+    }
+
     document.getElementById('q10-ct-submit').addEventListener('click', async () => {
+      clearErrors();
       const fname = document.getElementById('q10-ct-fname').value.trim();
       const lname = document.getElementById('q10-ct-lname').value.trim();
-      if (!fname || !lname) { showToast('Nombres y Apellidos son obligatorios', 'error'); return; }
-
       const email   = document.getElementById('q10-ct-email').value.trim();
       const celular = document.getElementById('q10-ct-phone').value.trim();
-      if (!email && !celular) { showToast('Informe ao menos celular ou email', 'error'); return; }
+
+      // Validation
+      if (!fname) { markError('q10-ct-fname', 'Informe os Nombres'); return; }
+      if (!lname) { markError('q10-ct-lname', 'Informe os Apellidos'); return; }
+      if (!email && !celular) { markError('q10-ct-phone', 'Informe ao menos celular ou email'); markError('q10-ct-email', 'Informe ao menos celular ou email'); return; }
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { markError('q10-ct-email', 'Email inválido'); return; }
 
       const btn = document.getElementById('q10-ct-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';

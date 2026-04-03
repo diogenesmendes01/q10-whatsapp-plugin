@@ -24,17 +24,28 @@
 }
 
 .q10-radio-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 13px;
   color: #374151;
   cursor: pointer;
+  line-height: 1;
 }
 
 .q10-radio-label input[type="radio"] {
+  width: 15px;
+  height: 15px;
   accent-color: #7C3AED;
   cursor: pointer;
+  margin: 0;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.q10-radio-label span {
+  vertical-align: middle;
+  line-height: 1;
 }
 
 .q10-modal-wide {
