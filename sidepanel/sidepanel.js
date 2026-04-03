@@ -1337,10 +1337,10 @@
       btn.disabled = true; btn.textContent = 'Registrando...';
 
       try {
-        // Build Detalle array
+        // Build Detalle array — Q10 only accepts "Celular" or "Email"
         const detalle = [];
-        if (celular) detalle.push({ Tipo_detalle: 'Telefono', Descripcion: celular });
-        if (email)   detalle.push({ Tipo_detalle: 'Email',    Descripcion: email });
+        if (celular) detalle.push({ Tipo_detalle: 'Celular', Descripcion: celular });
+        if (email)   detalle.push({ Tipo_detalle: 'Email',   Descripcion: email });
 
         const genero    = document.querySelector('input[name="q10-ct-genero"]:checked')?.value || '';
         const origem    = document.getElementById('q10-ct-origem').value;
@@ -1348,18 +1348,20 @@
         const indicador = document.getElementById('q10-ct-indicador').value.trim();
         const obs       = document.getElementById('q10-ct-obs').value.trim();
 
-        if (genero)    detalle.push({ Tipo_detalle: 'Genero',    Descripcion: genero });
-        if (origem)    detalle.push({ Tipo_detalle: 'Origen',    Descripcion: origem });
-        if (campanha)  detalle.push({ Tipo_detalle: 'Campanha',  Descripcion: campanha });
-        if (indicador) detalle.push({ Tipo_detalle: 'Indicador', Descripcion: indicador });
-        if (obs)       detalle.push({ Tipo_detalle: 'Observacion', Descripcion: obs });
-
-        await sendMsg('createContacto', { body: {
+        // Send to Q10
+        const result = await sendMsg('createContacto', { body: {
           Consecutivo_oportunidad: 0,
           Nombres: fname,
           Apellidos: lname,
           Detalle: detalle
         }});
+
+        // Save extra fields locally (keyed by phone or name)
+        const localKey = 'extra_' + (celular || fname + '_' + lname).replace(/\s+/g, '_');
+        const extraData = { genero, origem, campanha, indicador, obs, savedAt: Date.now(), nombres: fname, apellidos: lname };
+        const storageUpdate = {};
+        storageUpdate[localKey] = extraData;
+        chrome.storage.local.set(storageUpdate);
 
         showToast('Contacto registrado ✓', 'success');
         removeModal();
