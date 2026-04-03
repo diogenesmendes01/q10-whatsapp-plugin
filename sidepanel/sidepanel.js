@@ -1232,65 +1232,15 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-
-          <div class="q10-form-section-title">Identificação</div>
           <div class="q10-form-row">
             <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
             <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellidos"></div>
           </div>
-
-          <div class="q10-form-group">
-            <label class="q10-form-label">Gênero</label>
-            <div class="q10-radio-group">
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Masculino"><span>Masculino</span></label>
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Femenino"><span>Feminino</span></label>
-              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Otro"><span>Outro</span></label>
-            </div>
-          </div>
-
-          <div class="q10-form-section-title">Contato</div>
           <div class="q10-form-row">
             <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
             <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
           </div>
-          <p style="font-size:11px;color:#6B7280;margin:-4px 0 8px">* Informe ao menos um: celular ou email</p>
-
-          <div class="q10-form-section-title">Origem</div>
-          <div class="q10-form-row">
-            <div class="q10-form-group">
-              <label class="q10-form-label">Como nos conheceu?</label>
-              <select class="q10-form-select" id="q10-ct-origem">
-                <option value="">— Selecione —</option>
-                <option value="Instagram">Instagram</option>
-                <option value="Facebook">Facebook</option>
-                <option value="Google">Google</option>
-                <option value="Indicação">Indicação</option>
-                <option value="Panfleto">Panfleto</option>
-                <option value="Evento">Evento</option>
-                <option value="Fachada/Loja">Fachada/Loja</option>
-                <option value="YouTube">YouTube</option>
-                <option value="TikTok">TikTok</option>
-                <option value="Outro">Outro</option>
-              </select>
-            </div>
-            <div class="q10-form-group">
-              <label class="q10-form-label">Campanha / Anúncio</label>
-              <input class="q10-form-input" id="q10-ct-campanha" placeholder="Ex: Black Friday, Post Reels...">
-            </div>
-          </div>
-
-          <div class="q10-form-row">
-            <div class="q10-form-group">
-              <label class="q10-form-label">Quem indicou?</label>
-              <input class="q10-form-input" id="q10-ct-indicador" placeholder="Nome do aluno que indicou">
-            </div>
-            <div class="q10-form-group">
-              <label class="q10-form-label">Observações</label>
-              <textarea class="q10-form-input q10-form-textarea" id="q10-ct-obs" placeholder="Notas adicionais..." maxlength="200" rows="3" style="resize:none;font-size:13px"></textarea>
-              <div style="text-align:right;font-size:11px;color:#9CA3AF;margin-top:2px"><span id="q10-ct-obs-count">0</span>/200</div>
-            </div>
-          </div>
-
+          <p style="font-size:11px;color:#6B7280;margin:0 0 4px">* Informe ao menos celular ou email</p>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1301,11 +1251,6 @@
     document.body.appendChild(overlay);
     overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
     overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
-
-    // Obs character counter
-    const obsEl = document.getElementById('q10-ct-obs');
-    const obsCount = document.getElementById('q10-ct-obs-count');
-    obsEl.addEventListener('input', () => { obsCount.textContent = obsEl.value.length; });
 
     // Form validation helper
     function markError(id, msg) {
@@ -1327,7 +1272,6 @@
       const email   = document.getElementById('q10-ct-email').value.trim();
       const celular = document.getElementById('q10-ct-phone').value.trim();
 
-      // Validation
       if (!fname) { markError('q10-ct-fname', 'Informe os Nombres'); return; }
       if (!lname) { markError('q10-ct-lname', 'Informe os Apellidos'); return; }
       if (!email && !celular) { markError('q10-ct-phone', 'Informe ao menos celular ou email'); markError('q10-ct-email', 'Informe ao menos celular ou email'); return; }
@@ -1342,26 +1286,12 @@
         if (celular) detalle.push({ Tipo_detalle: 'Celular', Descripcion: celular });
         if (email)   detalle.push({ Tipo_detalle: 'Email',   Descripcion: email });
 
-        const genero    = document.querySelector('input[name="q10-ct-genero"]:checked')?.value || '';
-        const origem    = document.getElementById('q10-ct-origem').value;
-        const campanha  = document.getElementById('q10-ct-campanha').value.trim();
-        const indicador = document.getElementById('q10-ct-indicador').value.trim();
-        const obs       = document.getElementById('q10-ct-obs').value.trim();
-
-        // Send to Q10
-        const result = await sendMsg('createContacto', { body: {
+        await sendMsg('createContacto', { body: {
           Consecutivo_oportunidad: 0,
           Nombres: fname,
           Apellidos: lname,
           Detalle: detalle
         }});
-
-        // Save extra fields locally (keyed by phone or name)
-        const localKey = 'extra_' + (celular || fname + '_' + lname).replace(/\s+/g, '_');
-        const extraData = { genero, origem, campanha, indicador, obs, savedAt: Date.now(), nombres: fname, apellidos: lname };
-        const storageUpdate = {};
-        storageUpdate[localKey] = extraData;
-        chrome.storage.local.set(storageUpdate);
 
         showToast('Contacto registrado ✓', 'success');
         removeModal();
