@@ -737,7 +737,7 @@
     document.getElementById('q10-start-enrollment').addEventListener('click', () => {
       startEnrollmentWizard(data.Celular || data.Telefono || currentPhone, data);
     });
-    document.getElementById('q10-create-lead').addEventListener('click', () => showCreateOportunidadModal(currentPhone, data));
+    document.getElementById('q10-create-lead').addEventListener('click', () => showCreateOportunidadModal(currentPhone, null, data));
     document.getElementById('q10-log-activity').addEventListener('click', () => showCreateActividadModal(data));
     document.getElementById('q10-view-q10').addEventListener('click', () => window.open('https://app.q10.com', '_blank'));
   }
@@ -1176,7 +1176,7 @@
     });
   }
 
-  function showCreateOportunidadModal(phone, detectedName = null, contactData) {
+  function showCreateOportunidadModal(phone, detectedName = null, contactData = null) {
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
@@ -1186,11 +1186,15 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-op-fname" value="${contactData?.Primer_nombre||''}" placeholder="Nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-op-lname" value="${contactData?.Primer_apellido||''}" placeholder="Apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${contactData?.Email||''}" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${phone||''}" placeholder="+502 4512-3489"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="q10-op-obs" placeholder="Notas..."></textarea></div>
+          <div class="q10-form-row">
+            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-op-fname" value="${contactData?.Nombres || contactData?.Primer_nombre || (detectedName ? detectedName.split(' ').slice(0,2).join(' ') : '')}" placeholder="Primer y segundo nombre"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-op-lname" value="${contactData?.Apellidos || contactData?.Primer_apellido || (detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '')}" placeholder="Apellidos"></div>
+          </div>
+          <div class="q10-form-row">
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${phone || contactData?.Celular || ''}" placeholder="+502 4512-3489"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${contactData?.Email||''}" placeholder="email@ejemplo.com"></div>
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="q10-op-obs" placeholder="Notas sobre o lead..."></textarea></div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
