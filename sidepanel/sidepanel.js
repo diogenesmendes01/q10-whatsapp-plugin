@@ -1178,27 +1178,42 @@
 
   function showCreateOportunidadModal(phone, detectedName = null, contactData = null) {
     removeModal();
+
+    // Pre-fill name: use detectedName or contactData
+    const prefillName = detectedName || (contactData ? [contactData.Nombres || contactData.Primer_nombre, contactData.Apellidos || contactData.Primer_apellido].filter(Boolean).join(' ') : '');
+    const prefillPhone = (phone || contactData?.Celular || '').replace(/\D/g,'').slice(-12);
+    const prefillEmail = contactData?.Email || contactData?.Correo_electronico || '';
+
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
-      <div class="q10-modal">
+      <div class="q10-modal q10-modal-wide">
         <div class="q10-modal-header">
-          <span class="q10-modal-title">Crear Oportunidad</span>
+          <span class="q10-modal-title">Registrar Lead / Oportunidad</span>
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-op-fname" value="${contactData?.Nombres || contactData?.Primer_nombre || (detectedName ? detectedName.split(' ').slice(0,2).join(' ') : '')}" placeholder="Primer y segundo nombre"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-op-lname" value="${contactData?.Apellidos || contactData?.Primer_apellido || (detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '')}" placeholder="Apellidos"></div>
+          <div class="q10-form-group">
+            <label class="q10-form-label">Nome do Lead *</label>
+            <input class="q10-form-input" id="q10-op-nome" value="${prefillName}" placeholder="Ex: João Silva — Inglês Básico">
           </div>
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${phone || contactData?.Celular || ''}" placeholder="+502 4512-3489"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${contactData?.Email||''}" placeholder="email@ejemplo.com"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${prefillPhone}" placeholder="19988145438"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${prefillEmail}" placeholder="email@ejemplo.com"></div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="q10-op-obs" placeholder="Notas sobre o lead..."></textarea></div>
+          <div class="q10-form-row">
+            <div class="q10-form-group">
+              <label class="q10-form-label">Como nos conheceu?</label>
+              <select class="q10-form-select" id="q10-op-medio-pub"><option value="">Carregando...</option></select>
+            </div>
+            <div class="q10-form-group">
+              <label class="q10-form-label">Canal de contato</label>
+              <select class="q10-form-select" id="q10-op-medio-ctc"><option value="">Carregando...</option></select>
+            </div>
+          </div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
-          <button class="q10-btn q10-btn-cta" id="q10-op-submit">Crear</button>
+          <button class="q10-btn q10-btn-cta" id="q10-op-submit">Registrar Lead</button>
         </div>
       </div>
     `;
@@ -1206,21 +1221,57 @@
     overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
     overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+    // Load medios from API
+    sendMsg('fetchMedios').then(data => {
+      const pubSel = document.getElementById('q10-op-medio-pub');
+      const ctcSel = document.getElementById('q10-op-medio-ctc');
+      if (!pubSel || !ctcSel) return;
+
+      pubSel.innerHTML = '<option value="">— Como conheceu? —</option>' +
+        (data.mediospublicitarios || []).map(m =>
+          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+        ).join('');
+
+      ctcSel.innerHTML = '<option value="">— Canal —</option>' +
+        (data.medioscontacto || []).map(m =>
+          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+        ).join('');
+
+      // Auto-select WhatsApp if found
+      Array.from(ctcSel.options).forEach(opt => {
+        if (opt.text.toLowerCase().includes('whatsapp')) ctcSel.value = opt.value;
+      });
+    }).catch(() => {
+      const pubSel = document.getElementById('q10-op-medio-pub');
+      const ctcSel = document.getElementById('q10-op-medio-ctc');
+      if (pubSel) pubSel.innerHTML = '<option value="">— Não disponível —</option>';
+      if (ctcSel) ctcSel.innerHTML = '<option value="">— Não disponível —</option>';
+    });
+
     document.getElementById('q10-op-submit').addEventListener('click', async () => {
-      const fname = document.getElementById('q10-op-fname').value.trim();
-      const lname = document.getElementById('q10-op-lname').value.trim();
-      if (!fname || !lname) { showToast('Nombre y apellido obligatorios', 'error'); return; }
+      const nome = document.getElementById('q10-op-nome').value.trim();
+      if (!nome) { showToast('Nome do lead é obrigatório', 'error'); document.getElementById('q10-op-nome').style.borderColor='#EF4444'; return; }
       const btn = document.getElementById('q10-op-submit');
-      btn.disabled = true; btn.textContent = 'Creando...';
+      btn.disabled = true; btn.textContent = 'Registrando...';
       try {
-        await sendMsg('createOportunidad', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-op-email').value.trim(), Celular: document.getElementById('q10-op-phone').value.trim(), Observaciones: document.getElementById('q10-op-obs').value.trim() } });
-        showToast('Oportunidad creada ✓', 'success');
+        const body = { Nombre_oportunidad: nome };
+        const cel = document.getElementById('q10-op-phone').value.replace(/\D/g,'').slice(-12);
+        const email = document.getElementById('q10-op-email').value.trim();
+        const medioPub = document.getElementById('q10-op-medio-pub').value;
+        const medioCtc = document.getElementById('q10-op-medio-ctc').value;
+        if (cel) body.Celular = cel;
+        if (email) body.Correo_electronico = email;
+        if (medioPub) body.Consecutivo_como_se_entero = parseInt(medioPub);
+        if (medioCtc) body.Consecutivo_medio_contacto = parseInt(medioCtc);
+
+        await sendMsg('createOportunidad', { body });
+        showToast('Lead registrado en Q10 ✓', 'success');
         removeModal();
         sendMsg('clearCache').catch(() => {});
         if (currentPhone) searchPhone(currentPhone);
       } catch (err) {
         showToast(err.message, 'error');
-        btn.disabled = false; btn.textContent = 'Crear';
+        btn.disabled = false; btn.textContent = 'Registrar Lead';
       }
     });
   }

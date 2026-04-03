@@ -225,15 +225,19 @@ async function searchContacts({ phone, name }) {
 // ---------- Fetch catalogs ----------
 
 async function fetchCatalogs() {
-  const [programas, periodos, sedes] = await Promise.all([
+  const [programas, periodos, sedes, mediospublicitarios, medioscontacto] = await Promise.all([
     apiGet('/programas').catch(() => []),
     apiGet('/periodos').catch(() => []),
-    apiGet('/sedes').catch(() => [])
+    apiGet('/sedes').catch(() => []),
+    apiGet('/mediospublicitarios', { Estado: 'Activo' }).catch(() => []),
+    apiGet('/medioscontacto', { Estado: 'Activo' }).catch(() => [])
   ]);
   return {
     programas: Array.isArray(programas) ? programas : [],
     periodos: Array.isArray(periodos) ? periodos : [],
-    sedes: Array.isArray(sedes) ? sedes : []
+    sedes: Array.isArray(sedes) ? sedes : [],
+    mediospublicitarios: Array.isArray(mediospublicitarios) ? mediospublicitarios : [],
+    medioscontacto: Array.isArray(medioscontacto) ? medioscontacto : []
   };
 }
 
@@ -308,6 +312,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'createOportunidad':
       return handle(apiPost('/oportunidades', msg.body));
+
+    case 'fetchMedios':
+      return handle(Promise.all([
+        apiGet('/mediospublicitarios', { Estado: 'Activo' }).catch(() => []),
+        apiGet('/medioscontacto', { Estado: 'Activo' }).catch(() => [])
+      ]).then(([pub, ctc]) => ({ mediospublicitarios: pub, medioscontacto: ctc })));
 
     case 'createActividad':
       return handle(apiPost('/actividades', msg.body));
