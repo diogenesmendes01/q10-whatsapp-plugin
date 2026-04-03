@@ -1282,9 +1282,11 @@
 
       try {
         // Build Detalle array — Q10 only accepts "Celular" or "Email"
+        // Q10 limits Celular description to 12 chars — strip country code/formatting
+        const celularQ10 = celular.replace(/\D/g, '').slice(-12);
         const detalle = [];
-        if (celular) detalle.push({ Tipo_detalle: 'Celular', Descripcion: celular });
-        if (email)   detalle.push({ Tipo_detalle: 'Email',   Descripcion: email });
+        if (celularQ10) detalle.push({ Tipo_detalle: 'Celular', Descripcion: celularQ10 });
+        if (email)      detalle.push({ Tipo_detalle: 'Email',   Descripcion: email });
 
         await sendMsg('createContacto', { body: {
           Consecutivo_oportunidad: 0,
