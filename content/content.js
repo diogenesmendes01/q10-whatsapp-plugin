@@ -52,7 +52,7 @@
       loader.src = chrome.runtime.getURL('inject/loader.js');
       loader.type = 'text/javascript';
       loader.onload = () => {
-        console.log(TAG, 'loader.js injected');
+        console.log(LOG_PREFIX, 'loader.js injected');
         loader.remove();
       };
       (document.head || document.documentElement).appendChild(loader);
