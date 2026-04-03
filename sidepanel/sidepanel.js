@@ -1226,21 +1226,74 @@
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
     overlay.innerHTML = `
-      <div class="q10-modal">
+      <div class="q10-modal q10-modal-wide">
         <div class="q10-modal-header">
           <span class="q10-modal-title">Registrar Contacto</span>
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 2 ? detectedName.split(' ').slice(2).join(' ') : (detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '')}" placeholder="Apellidos"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
-          <p class="q10-form-hint" style="font-size:11px;color:#6B7280;margin:-6px 0 4px">* Informe email ou celular (ao menos um obrigatório)</p>
+
+          <div class="q10-form-section-title">Identificação</div>
+          <div class="q10-form-row">
+            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellidos"></div>
+          </div>
+
+          <div class="q10-form-group">
+            <label class="q10-form-label">Gênero</label>
+            <div class="q10-radio-group">
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Masculino"> Masculino</label>
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Femenino"> Feminino</label>
+              <label class="q10-radio-label"><input type="radio" name="q10-ct-genero" value="Otro"> Outro</label>
+            </div>
+          </div>
+
+          <div class="q10-form-section-title">Contato</div>
+          <div class="q10-form-row">
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
+          </div>
+          <p style="font-size:11px;color:#6B7280;margin:-4px 0 8px">* Informe ao menos um: celular ou email</p>
+
+          <div class="q10-form-section-title">Origem</div>
+          <div class="q10-form-row">
+            <div class="q10-form-group">
+              <label class="q10-form-label">Como nos conheceu?</label>
+              <select class="q10-form-select" id="q10-ct-origem">
+                <option value="">— Selecione —</option>
+                <option value="Instagram">Instagram</option>
+                <option value="Facebook">Facebook</option>
+                <option value="Google">Google</option>
+                <option value="Indicação">Indicação</option>
+                <option value="Panfleto">Panfleto</option>
+                <option value="Evento">Evento</option>
+                <option value="Fachada/Loja">Fachada/Loja</option>
+                <option value="YouTube">YouTube</option>
+                <option value="TikTok">TikTok</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div class="q10-form-group">
+              <label class="q10-form-label">Campanha / Anúncio</label>
+              <input class="q10-form-input" id="q10-ct-campanha" placeholder="Ex: Black Friday, Post Reels...">
+            </div>
+          </div>
+
+          <div class="q10-form-row">
+            <div class="q10-form-group">
+              <label class="q10-form-label">Quem indicou?</label>
+              <input class="q10-form-input" id="q10-ct-indicador" placeholder="Nome do aluno que indicou">
+            </div>
+            <div class="q10-form-group">
+              <label class="q10-form-label">Observações</label>
+              <input class="q10-form-input" id="q10-ct-obs" placeholder="Notas adicionais...">
+            </div>
+          </div>
+
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
-          <button class="q10-btn q10-btn-primary" id="q10-ct-submit">Registrar</button>
+          <button class="q10-btn q10-btn-primary" id="q10-ct-submit">Registrar Contacto</button>
         </div>
       </div>
     `;
@@ -1251,24 +1304,47 @@
     document.getElementById('q10-ct-submit').addEventListener('click', async () => {
       const fname = document.getElementById('q10-ct-fname').value.trim();
       const lname = document.getElementById('q10-ct-lname').value.trim();
-      if (!fname || !lname) { showToast('Nombre y apellido obligatorios', 'error'); return; }
+      if (!fname || !lname) { showToast('Nombres y Apellidos son obligatorios', 'error'); return; }
+
+      const email   = document.getElementById('q10-ct-email').value.trim();
+      const celular = document.getElementById('q10-ct-phone').value.trim();
+      if (!email && !celular) { showToast('Informe ao menos celular ou email', 'error'); return; }
+
       const btn = document.getElementById('q10-ct-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
+
       try {
-        const email = document.getElementById('q10-ct-email').value.trim();
-      const celular = document.getElementById('q10-ct-phone').value.trim();
-      if (!email && !celular) { showToast('Informe email ou celular (ao menos um)', 'error'); btn.disabled = false; btn.textContent = 'Registrar'; return; }
-      const detalle = [];
-      if (email) detalle.push({ Tipo_detalle: 'Email', Descripcion: email });
-      if (celular) detalle.push({ Tipo_detalle: 'Telefono', Descripcion: celular });
-      await sendMsg('createContacto', { body: { Consecutivo_oportunidad: 0, Nombres: fname, Apellidos: lname, Detalle: detalle } });
+        // Build Detalle array
+        const detalle = [];
+        if (celular) detalle.push({ Tipo_detalle: 'Telefono', Descripcion: celular });
+        if (email)   detalle.push({ Tipo_detalle: 'Email',    Descripcion: email });
+
+        const genero    = document.querySelector('input[name="q10-ct-genero"]:checked')?.value || '';
+        const origem    = document.getElementById('q10-ct-origem').value;
+        const campanha  = document.getElementById('q10-ct-campanha').value.trim();
+        const indicador = document.getElementById('q10-ct-indicador').value.trim();
+        const obs       = document.getElementById('q10-ct-obs').value.trim();
+
+        if (genero)    detalle.push({ Tipo_detalle: 'Genero',    Descripcion: genero });
+        if (origem)    detalle.push({ Tipo_detalle: 'Origen',    Descripcion: origem });
+        if (campanha)  detalle.push({ Tipo_detalle: 'Campanha',  Descripcion: campanha });
+        if (indicador) detalle.push({ Tipo_detalle: 'Indicador', Descripcion: indicador });
+        if (obs)       detalle.push({ Tipo_detalle: 'Observacion', Descripcion: obs });
+
+        await sendMsg('createContacto', { body: {
+          Consecutivo_oportunidad: 0,
+          Nombres: fname,
+          Apellidos: lname,
+          Detalle: detalle
+        }});
+
         showToast('Contacto registrado ✓', 'success');
         removeModal();
         sendMsg('clearCache').catch(() => {});
         if (currentPhone) searchPhone(currentPhone);
       } catch (err) {
         showToast(err.message, 'error');
-        btn.disabled = false; btn.textContent = 'Registrar';
+        btn.disabled = false; btn.textContent = 'Registrar Contacto';
       }
     });
   }
