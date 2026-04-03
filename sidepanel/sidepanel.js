@@ -991,12 +991,17 @@
           const fname = document.getElementById('wz-fname').value.trim();
           const lname = document.getElementById('wz-lname').value.trim();
           if (!fname || !lname) throw new Error('Nombre y apellido son obligatorios.');
+          const wzEmail = document.getElementById('wz-email').value.trim();
+          const wzCelular = document.getElementById('wz-phone').value.trim();
+          if (!wzEmail && !wzCelular) throw new Error('Informe email ou celular (ao menos um).');
+          const wzDetalle = [];
+          if (wzEmail) wzDetalle.push({ Tipo_detalle: 'Email', Descripcion: wzEmail });
+          if (wzCelular) wzDetalle.push({ Tipo_detalle: 'Telefono', Descripcion: wzCelular });
           const payload = {
-            Primer_nombre: fname, Segundo_nombre: document.getElementById('wz-fname2').value.trim(),
-            Primer_apellido: lname, Segundo_apellido: document.getElementById('wz-lname2').value.trim(),
-            Numero_identificacion: document.getElementById('wz-docnum').value.trim(),
-            Email: document.getElementById('wz-email').value.trim(),
-            Celular: document.getElementById('wz-phone').value.trim(),
+            Consecutivo_oportunidad: 0,
+            Nombres: [fname, document.getElementById('wz-fname2').value.trim()].filter(Boolean).join(' '),
+            Apellidos: [lname, document.getElementById('wz-lname2').value.trim()].filter(Boolean).join(' '),
+            Detalle: wzDetalle,
           };
           const result = await sendMsg('createContacto', { body: payload });
           res.contacto = { ...payload, ...result };
@@ -1227,10 +1232,11 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ')[0] : ''}" placeholder="Nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 2 ? detectedName.split(' ').slice(2).join(' ') : (detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '')}" placeholder="Apellidos"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
           <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
+          <p class="q10-form-hint" style="font-size:11px;color:#6B7280;margin:-6px 0 4px">* Informe email ou celular (ao menos um obrigatório)</p>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1249,7 +1255,13 @@
       const btn = document.getElementById('q10-ct-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
       try {
-        await sendMsg('createContacto', { body: { Primer_nombre: fname, Primer_apellido: lname, Email: document.getElementById('q10-ct-email').value.trim(), Celular: document.getElementById('q10-ct-phone').value.trim() } });
+        const email = document.getElementById('q10-ct-email').value.trim();
+      const celular = document.getElementById('q10-ct-phone').value.trim();
+      if (!email && !celular) { showToast('Informe email ou celular (ao menos um)', 'error'); btn.disabled = false; btn.textContent = 'Registrar'; return; }
+      const detalle = [];
+      if (email) detalle.push({ Tipo_detalle: 'Email', Descripcion: email });
+      if (celular) detalle.push({ Tipo_detalle: 'Telefono', Descripcion: celular });
+      await sendMsg('createContacto', { body: { Consecutivo_oportunidad: 0, Nombres: fname, Apellidos: lname, Detalle: detalle } });
         showToast('Contacto registrado ✓', 'success');
         removeModal();
         sendMsg('clearCache').catch(() => {});
