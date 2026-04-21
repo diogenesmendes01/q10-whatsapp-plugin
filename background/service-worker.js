@@ -68,8 +68,9 @@ async function apiGet(endpoint, params = {}, opts = {}) {
     if (cached) return cached;
   }
 
+  const base = await getApiBaseUrl();
   const query = new URLSearchParams({ Limit: '1000', Offset: '1', ...params }).toString();
-  const url = `${API_BASE}${endpoint}?${query}`;
+  const url = `${base}${endpoint}?${query}`;
 
   const resp = await fetch(url, {
     method: 'GET',
@@ -93,7 +94,8 @@ async function apiPost(endpoint, body) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key não configurada. Configure a chave Q10 nas opções da extensão.');
 
-  const url = `${API_BASE}${endpoint}`;
+  const base = await getApiBaseUrl();
+  const url = `${base}${endpoint}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
