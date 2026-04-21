@@ -1485,13 +1485,18 @@
 
   function showCreateActividadModal(contactData) {
     removeModal();
-    // BUG-03 fix: /actividades schema is Consecutivo_negocio, Estado_actividad, Tipo_actividad,
-    // Numero_identificacion_asesor, Fecha_actividad. Previously plugin sent Tipo/Descripcion/
-    // Fecha/Codigo_oportunidad/Observaciones which all 400'd silently.
-    // Valid enum values for Estado_actividad / Tipo_actividad must be copied from Q10 UI — the
-    // API doesn't expose them and brute-force probing (Pendiente/Realizada/Abierta/etc.) all fail.
+    // BUG-03 fix: /actividades schema discovered via live probing (2026-04-20):
+    //   Consecutivo_negocio (int, from existing oportunidad),
+    //   Estado_actividad: "C" = Completada (requires Resultado_actividad)
+    //                     "P" = Programada (requires Descripcion_actividad),
+    //   Tipo_actividad (enum, no API endpoint — values hardcoded from Q10 UI):
+    //     Llamada, WhatsApp, Correo, Nota, Reunión
+    //   Numero_identificacion_asesor (auto-injected by SW from storage),
+    //   Fecha_actividad (auto-set to today by SW if missing).
     const overlay = el('div', 'q10-modal-overlay');
-    const presetNegocio = contactData?.Consecutivo_negocio || '';
+    const presetNegocio = contactData?.Consecutivo_negocio || contactData?.Negocio_favorito?.Consecutivo_negocio || '';
+    const TIPOS_ACTIVIDAD = ['Llamada', 'WhatsApp', 'Correo', 'Nota', 'Reunión'];
+    const tipoOpts = TIPOS_ACTIVIDAD.map(t => `<option value="${t}" ${t === 'WhatsApp' ? 'selected' : ''}>${t}</option>`).join('');
     overlay.innerHTML = `
       <div class="q10-modal">
         <div class="q10-modal-header">
@@ -1500,18 +1505,28 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-form-group"><label class="q10-form-label">Consecutivo Negocio *</label>
-            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${presetNegocio}" placeholder="ID del negocio (crear una oportunidad primero)">
-            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Q10 requiere un negocio existente. Cree una oportunidad en el contacto antes de registrar actividades.</div>
-          </div>
-          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
-            <input class="q10-form-input" id="q10-act-type" placeholder="Valor exacto del enum Q10 (ej: Llamada)" value="WhatsApp">
-            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Use el valor exacto configurado en Q10. Ejemplo: "Llamada", "Correo electrónico".</div>
+            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${presetNegocio}" placeholder="ID del negocio (ver oportunidad primero)">
+            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Cree una oportunidad en el contacto antes de registrar actividades; el ID del Primer Negocio aparece en la respuesta.</div>
           </div>
           <div class="q10-form-group"><label class="q10-form-label">Estado *</label>
-            <input class="q10-form-input" id="q10-act-estado" placeholder="Valor exacto del enum (ej: Pendiente)" value="">
-            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Valor exacto del enum Estado_actividad desde Q10.</div>
+            <div style="display:flex;gap:16px;margin-top:4px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                <input type="radio" name="q10-act-estado" value="C" checked> Completada
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                <input type="radio" name="q10-act-estado" value="P"> Programada
+              </label>
+            </div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Descripción</label><textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la interacción..."></textarea></div>
+          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
+            <select class="q10-form-select" id="q10-act-type">${tipoOpts}</select>
+          </div>
+          <div class="q10-form-group" id="q10-act-resultado-wrap"><label class="q10-form-label">Resultado *</label>
+            <textarea class="q10-form-textarea" id="q10-act-resultado" placeholder="Resultado de la interacción (ej: cliente interesado, a pedido agendar presentación)"></textarea>
+          </div>
+          <div class="q10-form-group" id="q10-act-desc-wrap" style="display:none;"><label class="q10-form-label">Descripción *</label>
+            <textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la actividad programada"></textarea>
+          </div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1523,24 +1538,36 @@
     overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
     overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+    // Toggle Resultado vs Descripción based on Estado (C=Completada, P=Programada)
+    overlay.querySelectorAll('input[name="q10-act-estado"]').forEach(radio => {
+      radio.addEventListener('change', (ev) => {
+        const isCompletada = ev.target.value === 'C';
+        document.getElementById('q10-act-resultado-wrap').style.display = isCompletada ? '' : 'none';
+        document.getElementById('q10-act-desc-wrap').style.display = isCompletada ? 'none' : '';
+      });
+    });
+
     document.getElementById('q10-act-submit').addEventListener('click', async () => {
-      const desc = document.getElementById('q10-act-desc').value.trim();
       const negocio = parseInt(document.getElementById('q10-act-negocio').value, 10);
-      const tipo = document.getElementById('q10-act-type').value.trim();
-      const estado = document.getElementById('q10-act-estado').value.trim();
+      const tipo = document.getElementById('q10-act-type').value;
+      const estado = overlay.querySelector('input[name="q10-act-estado"]:checked').value;
+      const resultado = document.getElementById('q10-act-resultado').value.trim();
+      const desc = document.getElementById('q10-act-desc').value.trim();
       if (!negocio || Number.isNaN(negocio)) { showToast('Consecutivo negocio obligatorio', 'error'); return; }
-      if (!tipo) { showToast('Tipo obligatorio', 'error'); return; }
-      if (!estado) { showToast('Estado obligatorio', 'error'); return; }
+      if (estado === 'C' && !resultado) { showToast('Resultado obligatorio para actividades completadas', 'error'); return; }
+      if (estado === 'P' && !desc) { showToast('Descripción obligatoria para actividades programadas', 'error'); return; }
       const btn = document.getElementById('q10-act-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
       try {
         // Numero_identificacion_asesor and Fecha_actividad are auto-injected by service-worker.
-        await sendMsg('createActividad', { body: {
+        const body = {
           Consecutivo_negocio: negocio,
           Tipo_actividad: tipo,
-          Estado_actividad: estado,
-          Descripcion: desc || `Interacción WhatsApp con ${fullName(contactData)}`,
-        }});
+          Estado_actividad: estado, // "C" or "P"
+        };
+        if (estado === 'C') body.Resultado_actividad = resultado;
+        else body.Descripcion_actividad = desc;
+        await sendMsg('createActividad', { body });
         showToast('Actividad registrada ✓', 'success');
         removeModal();
       } catch (err) {
