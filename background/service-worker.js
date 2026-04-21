@@ -230,14 +230,16 @@ async function searchContacts({ phone, name }) {
 // ---------- Fetch catalogs ----------
 
 async function fetchCatalogs() {
-  const [programas, periodos, sedes, jornadas, niveles, tiposIdent, sexos, mediospublicitarios, medioscontacto] = await Promise.all([
+  const [programas, periodos, sedes, jornadas, sedesjornadas, niveles, tiposIdent, sexos, condicionesMat, mediospublicitarios, medioscontacto] = await Promise.all([
     apiGet('/programas').catch((e) => { console.warn('[Q10] /programas failed:', e.message); return []; }),
     apiGet('/periodos').catch((e) => { console.warn('[Q10] /periodos failed:', e.message); return []; }),
     apiGet('/sedes').catch((e) => { console.warn('[Q10] /sedes failed:', e.message); return []; }),
     apiGet('/jornadas').catch((e) => { console.warn('[Q10] /jornadas failed:', e.message); return []; }),
+    apiGet('/sedesjornadas').catch((e) => { console.warn('[Q10] /sedesjornadas failed:', e.message); return []; }),
     apiGet('/niveles', { Estado: true }).catch((e) => { console.warn('[Q10] /niveles failed:', e.message); return []; }),
     apiGet('/tiposidentificacion').catch((e) => { console.warn('[Q10] /tiposidentificacion failed:', e.message); return []; }),
     apiGet('/sexos').catch((e) => { console.warn('[Q10] /sexos failed:', e.message); return []; }),
+    apiGet('/condicionesMatricula', { Estado: true }).catch((e) => { console.warn('[Q10] /condicionesMatricula failed:', e.message); return []; }),
     apiGet('/mediospublicitarios', { Estado: true }).catch((e) => { console.warn('[Q10] /mediospublicitarios failed:', e.message); return []; }),
     apiGet('/medioscontacto', { Estado: true }).catch((e) => { console.warn('[Q10] /medioscontacto failed:', e.message); return []; })
   ]);
@@ -246,9 +248,11 @@ async function fetchCatalogs() {
     periodos: Array.isArray(periodos) ? periodos : [],
     sedes: Array.isArray(sedes) ? sedes : [],
     jornadas: Array.isArray(jornadas) ? jornadas : [],
+    sedesjornadas: Array.isArray(sedesjornadas) ? sedesjornadas : [],
     niveles: Array.isArray(niveles) ? niveles : [],
     tiposIdentificacion: Array.isArray(tiposIdent) ? tiposIdent : [],
     sexos: Array.isArray(sexos) ? sexos : [],
+    condicionesMatricula: Array.isArray(condicionesMat) ? condicionesMat : [],
     mediospublicitarios: Array.isArray(mediospublicitarios) ? mediospublicitarios : [],
     medioscontacto: Array.isArray(medioscontacto) ? medioscontacto : []
   };

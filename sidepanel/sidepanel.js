@@ -928,6 +928,12 @@
           const nivelOpts = (catalogsCache?.niveles || [])
             .map(n => `<option value="${n.Codigo_nivel}">${n.Nombre_nivel}</option>`)
             .join('');
+          const sedejornadaOpts = (catalogsCache?.sedesjornadas || [])
+            .map(sj => `<option value="${sj.Consecutivo}">${sj.Sede_jornada || (sj.Nombre_sede + ' - ' + sj.Nombre_jornada)}</option>`)
+            .join('');
+          const condicionOpts = (catalogsCache?.condicionesMatricula || [])
+            .map(c => `<option value="${c.Codigo}">${c.Nombre}</option>`)
+            .join('');
           const todayIso = new Date().toISOString().split('T')[0];
           formHtml = `
             <div class="q10-wizard-step-header">
@@ -954,13 +960,15 @@
               </select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Fecha de Matrícula *</label><input class="q10-form-input" id="wz-mat-fecha" type="date" value="${todayIso}" required></div>
-            <div class="q10-form-group"><label class="q10-form-label">Consecutivo Sede-Jornada *</label>
-              <input class="q10-form-input" id="wz-mat-sedejornada" type="number" min="1" placeholder="Ej: 1 (consulte en Q10)" value="1">
-              <div style="font-size:11px;color:#6B7280;margin-top:4px;">ID del registro sede-jornada en Q10. Consulte /cursos → Consecutivo_sede_jornada.</div>
+            <div class="q10-form-group"><label class="q10-form-label">Sede-Jornada *</label>
+              <select class="q10-form-select" id="wz-mat-sedejornada">
+                <option value="">— Seleccionar —</option>${sedejornadaOpts || '<option value="" disabled>No hay sede-jornadas</option>'}
+              </select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Condición de Matrícula *</label>
-              <input class="q10-form-input" id="wz-mat-condicion" placeholder="Valor exacto desde Q10 UI">
-              <div style="font-size:11px;color:#6B7280;margin-top:4px;">Enum Q10 (ej.: "Nuevo"/"Antiguo"). Valor exato vindo da UI Q10.</div>
+              <select class="q10-form-select" id="wz-mat-condicion">
+                <option value="">— Seleccionar —</option>${condicionOpts || '<option value="" disabled>No hay condiciones</option>'}
+              </select>
             </div>
             <div class="q10-form-group">
               <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#111;cursor:pointer;">
