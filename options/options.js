@@ -35,41 +35,120 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load current key and asesor ID
-  chrome.storage.sync.get(['q10ApiKey', 'q10AsesorId'], (result) => {
+  // ---------------- Asesor dropdown ----------------
+  const asesorSelect = document.getElementById('asesor-select');
+  const asesorDot = document.getElementById('asesor-dot');
+  const asesorLabel = document.getElementById('asesor-label');
+  const btnSaveAsesor = document.getElementById('btn-save-asesor');
+  const btnRefreshAsesores = document.getElementById('btn-refresh-asesores');
+  let savedAsesorId = null;
+
+  function updateAsesorStatus(configured, name) {
+    if (configured) {
+      asesorDot.className = 'status-dot green';
+      asesorLabel.textContent = name ? `Configurado: ${name}` : 'Configurado ✓';
+    } else {
+      asesorDot.className = 'status-dot red';
+      asesorLabel.textContent = 'Não configurado';
+    }
+  }
+
+  function fullAsesorName(a) {
+    return [a.Primer_nombre, a.Segundo_nombre, a.Primer_apellido, a.Segundo_apellido]
+      .filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(' ');
+  }
+
+  function populateAsesores(list, selectedId) {
+    if (!Array.isArray(list) || list.length === 0) {
+      asesorSelect.innerHTML = '<option value="">— Nenhum administrativo encontrado —</option>';
+      asesorSelect.disabled = true;
+      btnSaveAsesor.disabled = true;
+      return;
+    }
+    const sorted = list.slice().sort((a, b) => fullAsesorName(a).localeCompare(fullAsesorName(b)));
+    const opts = ['<option value="">— Seleccionar asesor —</option>'].concat(
+      sorted.map(a => {
+        const name = fullAsesorName(a) || `Asesor ${a.Numero_identificacion}`;
+        const sel = a.Numero_identificacion === selectedId ? 'selected' : '';
+        return `<option value="${a.Numero_identificacion}" data-name="${name}" ${sel}>${name} (${a.Numero_identificacion})</option>`;
+      })
+    );
+    asesorSelect.innerHTML = opts.join('');
+    asesorSelect.disabled = false;
+    btnSaveAsesor.disabled = false;
+    if (selectedId) {
+      const match = sorted.find(a => a.Numero_identificacion === selectedId);
+      if (match) updateAsesorStatus(true, fullAsesorName(match));
+    }
+  }
+
+  function loadAsesoresList() {
+    chrome.storage.sync.get(['q10ApiKey', 'q10AsesorId'], (result) => {
+      savedAsesorId = result.q10AsesorId || null;
+      if (!result.q10ApiKey) {
+        asesorSelect.innerHTML = '<option value="">— Configure a API key primeiro —</option>';
+        asesorSelect.disabled = true;
+        btnSaveAsesor.disabled = true;
+        updateAsesorStatus(false);
+        return;
+      }
+      asesorSelect.innerHTML = '<option value="">Carregando administrativos...</option>';
+      asesorSelect.disabled = true;
+      chrome.runtime.sendMessage({ action: 'fetchAdministrativos' }, (resp) => {
+        if (!resp || !resp.ok) {
+          const msg = (resp && resp.error) || 'Erro desconhecido';
+          asesorSelect.innerHTML = `<option value="">— Erro: ${msg} —</option>`;
+          asesorSelect.disabled = true;
+          btnSaveAsesor.disabled = true;
+          return;
+        }
+        populateAsesores(resp.data, savedAsesorId);
+      });
+    });
+  }
+
+  // Load on page ready
+  loadAsesoresList();
+
+  btnSaveAsesor.addEventListener('click', () => {
+    const asesorId = asesorSelect.value;
+    if (!asesorId) {
+      showAlert('error', 'Selecione um asesor da lista');
+      return;
+    }
+    const selectedOption = asesorSelect.options[asesorSelect.selectedIndex];
+    const name = selectedOption.getAttribute('data-name') || '';
+    btnSaveAsesor.disabled = true;
+    btnSaveAsesor.textContent = 'Salvando...';
+    chrome.storage.sync.set({ q10AsesorId: asesorId }, () => {
+      if (chrome.runtime.lastError) {
+        showAlert('error', 'Erro ao salvar: ' + chrome.runtime.lastError.message);
+      } else {
+        showAlert('success', `Asesor "${name}" salvo com sucesso!`);
+        savedAsesorId = asesorId;
+        updateAsesorStatus(true, name);
+      }
+      btnSaveAsesor.disabled = false;
+      btnSaveAsesor.textContent = '💾 Salvar Asesor';
+    });
+  });
+
+  btnRefreshAsesores.addEventListener('click', () => {
+    btnRefreshAsesores.disabled = true;
+    // Clear the SW's apiGet cache so we hit the network fresh
+    chrome.runtime.sendMessage({ action: 'clearCache' }, () => {
+      loadAsesoresList();
+      setTimeout(() => { btnRefreshAsesores.disabled = false; }, 800);
+    });
+  });
+
+  // Load API key status (asesor dropdown is handled separately above)
+  chrome.storage.sync.get(['q10ApiKey'], (result) => {
     if (result.q10ApiKey) {
       input.value = result.q10ApiKey;
       updateStatus(true);
     }
-    const asesorInput = document.getElementById('asesor-id-input');
-    if (asesorInput && result.q10AsesorId) {
-      asesorInput.value = result.q10AsesorId;
-    }
   });
-
-  // Save asesor ID (Numero_identificacion_asesor) — required for /oportunidades and /actividades
-  const btnSaveAsesor = document.getElementById('btn-save-asesor');
-  if (btnSaveAsesor) {
-    btnSaveAsesor.addEventListener('click', () => {
-      const asesorInput = document.getElementById('asesor-id-input');
-      const asesorId = (asesorInput.value || '').trim();
-      if (!asesorId) {
-        showAlert('error', 'Informe a identificación del asesor');
-        return;
-      }
-      btnSaveAsesor.disabled = true;
-      btnSaveAsesor.textContent = 'Salvando...';
-      chrome.storage.sync.set({ q10AsesorId: asesorId }, () => {
-        if (chrome.runtime.lastError) {
-          showAlert('error', 'Erro ao salvar: ' + chrome.runtime.lastError.message);
-        } else {
-          showAlert('success', 'Asesor salvo com sucesso!');
-        }
-        btnSaveAsesor.disabled = false;
-        btnSaveAsesor.textContent = '💾 Salvar Asesor';
-      });
-    });
-  }
 
   // Save
   btnSave.addEventListener('click', () => {
@@ -88,6 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         showAlert('success', 'Configuração salva com sucesso!');
         updateStatus(true);
+        // Auto-load asesores list now that we have an API key
+        chrome.runtime.sendMessage({ action: 'clearCache' }, () => loadAsesoresList());
       }
       btnSave.disabled = false;
       btnSave.textContent = '💾 Salvar';
@@ -101,6 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.sync.remove(['q10ApiKey'], () => {
       input.value = '';
       updateStatus(false);
+      // Reset asesor dropdown since it depends on the key
+      loadAsesoresList();
       showAlert('success', 'API key removida');
     });
   });

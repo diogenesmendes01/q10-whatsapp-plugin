@@ -257,19 +257,28 @@
     </div>
 
     <div class="card">
-      <div class="card-title">Identificación del asesor</div>
+      <div class="card-title">Asesor (vendedor)</div>
       <div class="card-desc">
-        Número de identificación do vendedor (asesor) logado. Usado automaticamente ao criar
-        oportunidades e registrar atividades no CRM. Obrigatório para o fluxo de vendas.
+        Selecione o vendedor que está usando este plugin. Ele será associado automaticamente
+        a oportunidades e atividades criadas no CRM. A lista vem direto de Q10 → Administrativos.
       </div>
+
+      <div class="status-indicator" id="asesor-status">
+        <div class="status-dot red" id="asesor-dot"></div>
+        <span class="status-label" id="asesor-label">Não configurado</span>
+      </div>
+
       <div class="form-group">
-        <label class="form-label">Numero_identificacion_asesor</label>
-        <input type="text" class="form-input" id="asesor-id-input"
-               placeholder="Ex: 208120496">
-        <div class="form-hint">Busque em Q10 → Administrativos → seu perfil, campo "Número de identificación".</div>
+        <label class="form-label">Asesor</label>
+        <select class="form-input" id="asesor-select" disabled>
+          <option value="">— Configure a API key primeiro —</option>
+        </select>
+        <div class="form-hint">Se faltar alguém, cadastre em Q10 → Administrativos e clique em Atualizar.</div>
       </div>
+
       <div class="btn-row">
-        <button class="btn btn-primary" id="btn-save-asesor" style="flex:1;">💾 Salvar Asesor</button>
+        <button class="btn btn-primary" id="btn-save-asesor" style="flex:1;" disabled>💾 Salvar Asesor</button>
+        <button class="btn btn-danger" id="btn-refresh-asesores" title="Recarregar lista do Q10">🔄</button>
       </div>
     </div>
 

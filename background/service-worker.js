@@ -377,6 +377,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'getAsesorId':
       return handle(getAsesorId().then(id => ({ asesorId: id })));
 
+    case 'fetchAdministrativos':
+      // Used by options page to populate the asesor dropdown. Cached 5 min via apiGet.
+      return handle(apiGet('/administrativos'));
+
     case 'exportAll':
       return handle((async () => {
         const [contactos, usuarios] = await Promise.all([
