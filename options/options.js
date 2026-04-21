@@ -35,7 +35,135 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load current key
+  // ---------------- Asesor dropdown ----------------
+  const asesorSelect = document.getElementById('asesor-select');
+  const asesorDot = document.getElementById('asesor-dot');
+  const asesorLabel = document.getElementById('asesor-label');
+  const btnSaveAsesor = document.getElementById('btn-save-asesor');
+  const btnRefreshAsesores = document.getElementById('btn-refresh-asesores');
+  let savedAsesorId = null;
+
+  function updateAsesorStatus(configured, name) {
+    if (configured) {
+      asesorDot.className = 'status-dot green';
+      asesorLabel.textContent = name ? `Configurado: ${name}` : 'Configurado ✓';
+    } else {
+      asesorDot.className = 'status-dot red';
+      asesorLabel.textContent = 'Não configurado';
+    }
+  }
+
+  function fullAsesorName(a) {
+    return [a.Primer_nombre, a.Segundo_nombre, a.Primer_apellido, a.Segundo_apellido]
+      .filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(' ');
+  }
+
+  // Escape API-sourced strings before interpolating into innerHTML templates.
+  // Nomes de administrativos/emails no Q10 são texto livre — sem escape,
+  // caracteres como < " ' podem quebrar o DOM ou abrir XSS.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function populateAsesores(list, selectedId) {
+    if (!Array.isArray(list) || list.length === 0) {
+      asesorSelect.innerHTML = '<option value="">— Nenhum administrativo encontrado —</option>';
+      asesorSelect.disabled = true;
+      btnSaveAsesor.disabled = true;
+      return;
+    }
+    const sorted = list.slice().sort((a, b) => fullAsesorName(a).localeCompare(fullAsesorName(b)));
+    const opts = ['<option value="">— Seleccionar asesor —</option>'].concat(
+      sorted.map(a => {
+        const name = fullAsesorName(a) || `Asesor ${a.Numero_identificacion}`;
+        const sel = a.Numero_identificacion === selectedId ? 'selected' : '';
+        return `<option value="${escHtml(a.Numero_identificacion)}" data-name="${escHtml(name)}" ${sel}>${escHtml(name)} (${escHtml(a.Numero_identificacion)})</option>`;
+      })
+    );
+    asesorSelect.innerHTML = opts.join('');
+    asesorSelect.disabled = false;
+    btnSaveAsesor.disabled = false;
+    if (selectedId) {
+      const match = sorted.find(a => a.Numero_identificacion === selectedId);
+      if (match) {
+        updateAsesorStatus(true, fullAsesorName(match));
+      } else {
+        // ID salvo não existe mais nesta lista — pode ser troca de tenant
+        // (user apenas regravou uma key diferente em vez de clicar em Limpar)
+        // ou o administrativo foi removido no Q10. Remover para o SW não
+        // continuar injetando um asesor inexistente em /oportunidades ou /actividades.
+        chrome.storage.sync.remove(['q10AsesorId'], () => {
+          savedAsesorId = null;
+          updateAsesorStatus(false);
+          showAlert('error', 'Asesor anterior no existe en esta lista. Selecione novamente abaixo.');
+        });
+      }
+    }
+  }
+
+  function loadAsesoresList() {
+    chrome.storage.sync.get(['q10ApiKey', 'q10AsesorId'], (result) => {
+      savedAsesorId = result.q10AsesorId || null;
+      if (!result.q10ApiKey) {
+        asesorSelect.innerHTML = '<option value="">— Configure a API key primeiro —</option>';
+        asesorSelect.disabled = true;
+        btnSaveAsesor.disabled = true;
+        updateAsesorStatus(false);
+        return;
+      }
+      asesorSelect.innerHTML = '<option value="">Carregando administrativos...</option>';
+      asesorSelect.disabled = true;
+      chrome.runtime.sendMessage({ action: 'fetchAdministrativos' }, (resp) => {
+        if (!resp || !resp.ok) {
+          const msg = (resp && resp.error) || 'Erro desconhecido';
+          asesorSelect.innerHTML = `<option value="">— Erro: ${escHtml(msg)} —</option>`;
+          asesorSelect.disabled = true;
+          btnSaveAsesor.disabled = true;
+          return;
+        }
+        populateAsesores(resp.data, savedAsesorId);
+      });
+    });
+  }
+
+  // Load on page ready
+  loadAsesoresList();
+
+  btnSaveAsesor.addEventListener('click', () => {
+    const asesorId = asesorSelect.value;
+    if (!asesorId) {
+      showAlert('error', 'Selecione um asesor da lista');
+      return;
+    }
+    const selectedOption = asesorSelect.options[asesorSelect.selectedIndex];
+    const name = selectedOption.getAttribute('data-name') || '';
+    btnSaveAsesor.disabled = true;
+    btnSaveAsesor.textContent = 'Salvando...';
+    chrome.storage.sync.set({ q10AsesorId: asesorId }, () => {
+      if (chrome.runtime.lastError) {
+        showAlert('error', 'Erro ao salvar: ' + chrome.runtime.lastError.message);
+      } else {
+        showAlert('success', `Asesor "${name}" salvo com sucesso!`);
+        savedAsesorId = asesorId;
+        updateAsesorStatus(true, name);
+      }
+      btnSaveAsesor.disabled = false;
+      btnSaveAsesor.textContent = '💾 Salvar Asesor';
+    });
+  });
+
+  btnRefreshAsesores.addEventListener('click', () => {
+    btnRefreshAsesores.disabled = true;
+    // Clear the SW's apiGet cache so we hit the network fresh
+    chrome.runtime.sendMessage({ action: 'clearCache' }, () => {
+      loadAsesoresList();
+      setTimeout(() => { btnRefreshAsesores.disabled = false; }, 800);
+    });
+  });
+
+  // Load API key status (asesor dropdown is handled separately above)
   chrome.storage.sync.get(['q10ApiKey'], (result) => {
     if (result.q10ApiKey) {
       input.value = result.q10ApiKey;
@@ -60,6 +188,8 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         showAlert('success', 'Configuração salva com sucesso!');
         updateStatus(true);
+        // Auto-load asesores list now that we have an API key
+        chrome.runtime.sendMessage({ action: 'clearCache' }, () => loadAsesoresList());
       }
       btnSave.disabled = false;
       btnSave.textContent = '💾 Salvar';
@@ -68,12 +198,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Clear
   btnClear.addEventListener('click', () => {
-    if (!confirm('Tem certeza que deseja remover a API key?')) return;
+    if (!confirm('Tem certeza que deseja remover a API key? O asesor configurado também será limpo.')) return;
 
-    chrome.storage.sync.remove(['q10ApiKey'], () => {
+    // Remove q10AsesorId junto: se trocar de tenant/chave, um asesor salvo de outro
+    // tenant seria injetado em oportunidades/atividades pelo service worker.
+    chrome.storage.sync.remove(['q10ApiKey', 'q10AsesorId'], () => {
       input.value = '';
+      savedAsesorId = null;
       updateStatus(false);
-      showAlert('success', 'API key removida');
+      updateAsesorStatus(false);
+      loadAsesoresList();
+      showAlert('success', 'API key e asesor removidos');
     });
   });
 
