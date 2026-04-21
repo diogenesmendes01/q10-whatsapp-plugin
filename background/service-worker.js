@@ -229,8 +229,8 @@ async function fetchCatalogs() {
     apiGet('/programas').catch(() => []),
     apiGet('/periodos').catch(() => []),
     apiGet('/sedes').catch(() => []),
-    apiGet('/mediospublicitarios', { Estado: 'Activo' }).catch(() => []),
-    apiGet('/medioscontacto', { Estado: 'Activo' }).catch(() => [])
+    apiGet('/mediospublicitarios', { Estado: true }).catch(() => []),
+    apiGet('/medioscontacto', { Estado: true }).catch(() => [])
   ]);
   return {
     programas: Array.isArray(programas) ? programas : [],
@@ -315,8 +315,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'fetchMedios':
       return handle(Promise.all([
-        apiGet('/mediospublicitarios', { Estado: 'Activo' }).catch(() => []),
-        apiGet('/medioscontacto', { Estado: 'Activo' }).catch(() => [])
+        apiGet('/mediospublicitarios', { Estado: true }).catch(() => []),
+        apiGet('/medioscontacto', { Estado: true }).catch(() => [])
       ]).then(([pub, ctc]) => ({ mediospublicitarios: pub, medioscontacto: ctc })));
 
     case 'createActividad':
