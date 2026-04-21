@@ -87,7 +87,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSaveAsesor.disabled = false;
     if (selectedId) {
       const match = sorted.find(a => a.Numero_identificacion === selectedId);
-      if (match) updateAsesorStatus(true, fullAsesorName(match));
+      if (match) {
+        updateAsesorStatus(true, fullAsesorName(match));
+      } else {
+        // ID salvo não existe mais nesta lista — pode ser troca de tenant
+        // (user apenas regravou uma key diferente em vez de clicar em Limpar)
+        // ou o administrativo foi removido no Q10. Remover para o SW não
+        // continuar injetando um asesor inexistente em /oportunidades ou /actividades.
+        chrome.storage.sync.remove(['q10AsesorId'], () => {
+          savedAsesorId = null;
+          updateAsesorStatus(false);
+          showAlert('error', 'Asesor anterior no existe en esta lista. Selecione novamente abaixo.');
+        });
+      }
     }
   }
 
