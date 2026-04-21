@@ -40,6 +40,11 @@ async function getApiKey() {
   return result.q10ApiKey || null;
 }
 
+async function getAsesorId() {
+  const result = await chrome.storage.sync.get(['q10AsesorId']);
+  return result.q10AsesorId || null;
+}
+
 async function apiGet(endpoint, params = {}, opts = {}) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key não configurada. Configure a chave Q10 nas opções da extensão.');
@@ -225,17 +230,29 @@ async function searchContacts({ phone, name }) {
 // ---------- Fetch catalogs ----------
 
 async function fetchCatalogs() {
-  const [programas, periodos, sedes, mediospublicitarios, medioscontacto] = await Promise.all([
-    apiGet('/programas').catch(() => []),
-    apiGet('/periodos').catch(() => []),
-    apiGet('/sedes').catch(() => []),
-    apiGet('/mediospublicitarios', { Estado: true }).catch(() => []),
-    apiGet('/medioscontacto', { Estado: true }).catch(() => [])
+  const [programas, periodos, sedes, jornadas, sedesjornadas, niveles, tiposIdent, sexos, condicionesMat, mediospublicitarios, medioscontacto] = await Promise.all([
+    apiGet('/programas').catch((e) => { console.warn('[Q10] /programas failed:', e.message); return []; }),
+    apiGet('/periodos').catch((e) => { console.warn('[Q10] /periodos failed:', e.message); return []; }),
+    apiGet('/sedes').catch((e) => { console.warn('[Q10] /sedes failed:', e.message); return []; }),
+    apiGet('/jornadas').catch((e) => { console.warn('[Q10] /jornadas failed:', e.message); return []; }),
+    apiGet('/sedesjornadas').catch((e) => { console.warn('[Q10] /sedesjornadas failed:', e.message); return []; }),
+    apiGet('/niveles', { Estado: true }).catch((e) => { console.warn('[Q10] /niveles failed:', e.message); return []; }),
+    apiGet('/tiposidentificacion').catch((e) => { console.warn('[Q10] /tiposidentificacion failed:', e.message); return []; }),
+    apiGet('/sexos').catch((e) => { console.warn('[Q10] /sexos failed:', e.message); return []; }),
+    apiGet('/condicionesMatricula', { Estado: true }).catch((e) => { console.warn('[Q10] /condicionesMatricula failed:', e.message); return []; }),
+    apiGet('/mediospublicitarios', { Estado: true }).catch((e) => { console.warn('[Q10] /mediospublicitarios failed:', e.message); return []; }),
+    apiGet('/medioscontacto', { Estado: true }).catch((e) => { console.warn('[Q10] /medioscontacto failed:', e.message); return []; })
   ]);
   return {
     programas: Array.isArray(programas) ? programas : [],
     periodos: Array.isArray(periodos) ? periodos : [],
     sedes: Array.isArray(sedes) ? sedes : [],
+    jornadas: Array.isArray(jornadas) ? jornadas : [],
+    sedesjornadas: Array.isArray(sedesjornadas) ? sedesjornadas : [],
+    niveles: Array.isArray(niveles) ? niveles : [],
+    tiposIdentificacion: Array.isArray(tiposIdent) ? tiposIdent : [],
+    sexos: Array.isArray(sexos) ? sexos : [],
+    condicionesMatricula: Array.isArray(condicionesMat) ? condicionesMat : [],
     mediospublicitarios: Array.isArray(mediospublicitarios) ? mediospublicitarios : [],
     medioscontacto: Array.isArray(medioscontacto) ? medioscontacto : []
   };
@@ -305,13 +322,35 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return handle(apiPost('/contactos', msg.body));
 
     case 'createEstudiante':
-      return handle(apiPost('/usuarios', msg.body));
+      // BUG-02 fix: POST /estudiantes (not /usuarios). Schema: Primer_nombre, Primer_apellido,
+      // Codigo_tipo_identificacion, Numero_identificacion, Genero, Email, Celular,
+      // Fecha_nacimiento, Codigo_programa (all required per live API validation).
+      return handle(apiPost('/estudiantes', msg.body));
 
     case 'createInscripcion':
       return handle(apiPost('/inscripciones', msg.body));
 
+    case 'createMatricula':
+      // BUG-04 fix: POST /matriculasProgramas. Schema requires: Consecutivo_inscripcion,
+      // Codigo_estudiante, Fecha_matricula, Consecutivo_sede_jornada, Consecutivo_periodo,
+      // Codigo_nivel, Condicion_matricula (enum — value from Q10 UI), Formalizada (bool).
+      return handle(apiPost('/matriculasProgramas', msg.body));
+
+    case 'createOrdenPago':
+      // BUG-06: /ordenespago returns 400 "La API no aplica para el modelo financiero de la
+      // institución" on tenants without finance module. The sidepanel detects this error
+      // and shows a friendly message instead of crashing.
+      return handle(apiPost('/ordenespago', msg.body));
+
     case 'createOportunidad':
-      return handle(apiPost('/oportunidades', msg.body));
+      return handle((async () => {
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        return apiPost('/oportunidades', body);
+      })());
 
     case 'fetchMedios':
       return handle(Promise.all([
@@ -320,7 +359,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       ]).then(([pub, ctc]) => ({ mediospublicitarios: pub, medioscontacto: ctc })));
 
     case 'createActividad':
-      return handle(apiPost('/actividades', msg.body));
+      // BUG-03 fix: POST /actividades expects Consecutivo_negocio, Estado_actividad,
+      // Tipo_actividad, Numero_identificacion_asesor, Fecha_actividad. Asesor ID is
+      // auto-injected from storage if not provided in body.
+      return handle((async () => {
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        if (!body.Fecha_actividad) {
+          body.Fecha_actividad = new Date().toISOString().split('T')[0];
+        }
+        return apiPost('/actividades', body);
+      })());
+
+    case 'getAsesorId':
+      return handle(getAsesorId().then(id => ({ asesorId: id })));
+
+    case 'fetchAdministrativos':
+      // Used by options page to populate the asesor dropdown. Cached 5 min via apiGet.
+      return handle(apiGet('/administrativos'));
 
     case 'exportAll':
       return handle((async () => {

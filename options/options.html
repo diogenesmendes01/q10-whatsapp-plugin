@@ -257,6 +257,32 @@
     </div>
 
     <div class="card">
+      <div class="card-title">Asesor (vendedor)</div>
+      <div class="card-desc">
+        Selecione o vendedor que está usando este plugin. Ele será associado automaticamente
+        a oportunidades e atividades criadas no CRM. A lista vem direto de Q10 → Administrativos.
+      </div>
+
+      <div class="status-indicator" id="asesor-status">
+        <div class="status-dot red" id="asesor-dot"></div>
+        <span class="status-label" id="asesor-label">Não configurado</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Asesor</label>
+        <select class="form-input" id="asesor-select" disabled>
+          <option value="">— Configure a API key primeiro —</option>
+        </select>
+        <div class="form-hint">Se faltar alguém, cadastre em Q10 → Administrativos e clique em Atualizar.</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save-asesor" style="flex:1;" disabled>💾 Salvar Asesor</button>
+        <button class="btn btn-danger" id="btn-refresh-asesores" title="Recarregar lista do Q10">🔄</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-title">Como obter a API Key</div>
       <div class="info-box">
         <strong>📋 Passos:</strong>

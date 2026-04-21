@@ -66,10 +66,36 @@
       .filter(Boolean).join(' ');
   }
 
+  // Escape API-sourced strings before interpolating into innerHTML templates.
+  // Q10 catálogos (administrativos, programas, etc.) trazem nomes configurados pelo
+  // cliente — sem escape, um nome com `<` / `"` quebra o DOM ou abre XSS.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function htmlText(value, fallback = '\u2014') {
+    const text = value === undefined || value === null || value === '' ? fallback : value;
+    return escHtml(text);
+  }
+
+  function htmlAttr(value) {
+    return escHtml(value === undefined || value === null ? '' : value);
+  }
+
+  function fullNameHtml(d) {
+    return htmlText(fullName(d));
+  }
+
   function showToast(text, type = '') {
     const existing = document.querySelector('.q10-toast');
     if (existing) existing.remove();
-    const t = el('div', `q10-toast ${type ? 'q10-toast-' + type : ''}`, text);
+    const t = el('div', `q10-toast ${type ? 'q10-toast-' + type : ''}`);
+    t.textContent = text || '';
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3500);
   }
@@ -215,18 +241,19 @@
   }
 
   function renderTagsSection(contactId, existingTags) {
+    const contactAttr = htmlAttr(contactId);
     return `
       <div class="q10-tags-section">
         <div class="q10-tags-header">
           <span class="q10-tags-title">${icon('clipboard')} Etiquetas</span>
         </div>
-        <div class="q10-tags-list" id="q10-tags-${contactId}">
+        <div class="q10-tags-list" id="q10-tags-${contactAttr}">
           ${AVAILABLE_TAGS.map(t => {
             const active = existingTags.includes(t.id);
             return `<button class="q10-tag ${active ? 'q10-tag-active' : ''}" 
-              data-tag="${t.id}" data-contact="${contactId}"
+              data-tag="${htmlAttr(t.id)}" data-contact="${contactAttr}"
               style="--tag-color: ${t.color}; --tag-bg: ${t.bg}">
-              ${t.label}
+              ${htmlText(t.label)}
             </button>`;
           }).join('')}
         </div>
@@ -269,6 +296,7 @@
 
   async function renderNotesSection(contactId) {
     const notes = await getContactNotes(contactId);
+    const contactAttr = htmlAttr(contactId);
     return `
       <div class="q10-notes-section">
         <div class="q10-notes-header">
@@ -283,22 +311,16 @@
         </div>
         <div class="q10-notes-list" id="q10-notes-list">
           ${notes.map(n => `
-            <div class="q10-note-card" data-note-id="${n.id}">
-              <div class="q10-note-date">${n.date}</div>
-              <div class="q10-note-text">${escapeHtml(n.text)}</div>
-              <button class="q10-note-delete" data-note-id="${n.id}" data-contact="${contactId}">✕</button>
+            <div class="q10-note-card" data-note-id="${htmlAttr(n.id)}">
+              <div class="q10-note-date">${htmlText(n.date, '')}</div>
+              <div class="q10-note-text">${htmlText(n.text, '')}</div>
+              <button class="q10-note-delete" data-note-id="${htmlAttr(n.id)}" data-contact="${contactAttr}">✕</button>
             </div>
           `).join('')}
           ${notes.length === 0 ? '<p class="q10-notes-empty">Sin notas aún</p>' : ''}
         </div>
       </div>
     `;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   // Attach tags and notes sections + event handlers to the current view
@@ -377,7 +399,7 @@
     body().innerHTML = `
       <div class="q10-state">
         <div class="q10-spinner"></div>
-        <div class="q10-state-title">${msg || 'Buscando no Q10...'}</div>
+        <div class="q10-state-title">${htmlText(msg, 'Buscando no Q10...')}</div>
         <div class="q10-state-text">Procurando dados do contato</div>
       </div>`;
     hideActions();
@@ -440,7 +462,7 @@
       <div class="q10-state">
         <span class="q10-state-icon" style="color:#EF4444">${ICONS.alertCircle}</span>
         <div class="q10-state-title">Erro</div>
-        <div class="q10-state-text">${msg}</div>
+        <div class="q10-state-text">${htmlText(msg, 'Erro desconhecido.')}</div>
         <button class="q10-btn q10-btn-outline" id="q10-retry">Tentar novamente</button>
       </div>`;
     hideActions();
@@ -477,7 +499,7 @@
   function phoneHtml(phone) {
     return `<div class="q10-phone-display">
       <span class="q10-phone-icon">${ICONS.phone}</span>
-      <span class="q10-phone-number">${formatPhone(phone)}</span>
+      <span class="q10-phone-number">${htmlText(formatPhone(phone), '')}</span>
     </div>`;
   }
 
@@ -492,7 +514,7 @@
 
     const displayHtml = isPhone 
       ? phoneHtml(detectedPhone)
-      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${detectedName}</span></div>`;
+      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${htmlText(detectedName, '')}</span></div>`;
 
     body().innerHTML = `
       ${displayHtml}
@@ -516,7 +538,7 @@
   // ================================================================
   function renderEstudiante(result) {
     const d = result.data;
-    const name = fullName(d);
+    const name = fullNameHtml(d);
     const phone = d.Celular || d.Telefono || currentPhone;
 
     let financialHtml = '';
@@ -546,7 +568,7 @@
           <div class="q10-section-title">${icon('alertCircle','q10-section-icon')} Pagos Pendientes (${result.pagosPendientes.length})</div>
           ${result.pagosPendientes.map(p => `
             <div class="q10-info-card" style="border-left:3px solid #EF4444;">
-              <div class="q10-info-row"><span class="q10-info-label">Concepto</span><span class="q10-info-value">${p.Concepto || p.Descripcion || p.Nombre || '—'}</span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Concepto</span><span class="q10-info-value">${htmlText(p.Concepto || p.Descripcion || p.Nombre)}</span></div>
               <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value"><span class="q10-badge q10-badge-red">${fmtMoney(p.Valor || p.Monto || p.Saldo)}</span></span></div>
               ${p.Fecha_vencimiento ? `<div class="q10-info-row"><span class="q10-info-label">Vencimiento</span><span class="q10-info-value">${new Date(p.Fecha_vencimiento).toLocaleDateString('es')}</span></div>` : ''}
             </div>
@@ -566,23 +588,23 @@
       ${phoneHtml(phone)}
       <span class="q10-contact-type q10-type-estudiante">${icon('graduation','q10-section-icon')} Estudiante</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${d.Codigo || '—'} · ${d.Numero_identificacion || ''}</div>
+      <div class="q10-contact-id">ID: ${htmlText(d.Codigo)} &middot; ${htmlText(d.Numero_identificacion, '')}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información Personal</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${d.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${d.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${d.Celular||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(d.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(d.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(d.Celular)}</span></div>
         </div>
       </div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('book','q10-section-icon')} Académico</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${d.Programa||d.Nombre_programa||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(d.Programa || d.Nombre_programa)}</span></div>
           <div class="q10-info-row"><span class="q10-info-label">Estado Matrícula</span>
-            <span class="q10-info-value"><span class="q10-badge ${d.Estado_matricula==='Activo'?'q10-badge-green':'q10-badge-gray'}">${d.Estado_matricula||'—'}</span></span>
+            <span class="q10-info-value"><span class="q10-badge ${d.Estado_matricula==='Activo'?'q10-badge-green':'q10-badge-gray'}">${htmlText(d.Estado_matricula)}</span></span>
           </div>
-          <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${d.Periodo||d.Nombre_periodo||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${htmlText(d.Periodo || d.Nombre_periodo)}</span></div>
         </div>
       </div>
       ${financialHtml}
@@ -631,7 +653,7 @@
   // ================================================================
   function renderOportunidad(result) {
     const d = result.data;
-    const name = fullName(d);
+    const name = fullNameHtml(d);
 
     let negociosHtml = '';
     if (result.negocios && result.negocios.length > 0) {
@@ -640,9 +662,9 @@
           <div class="q10-section-title">${icon('briefcase','q10-section-icon')} Negocios</div>
           ${result.negocios.map(n => `
             <div class="q10-info-card">
-              <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${n.Nombre||n.Descripcion||'—'}</span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${htmlText(n.Nombre || n.Descripcion)}</span></div>
               <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${fmtMoney(n.Valor)}</span></div>
-              <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${n.Estado||'—'}</span></span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${htmlText(n.Estado)}</span></span></div>
             </div>`).join('')}
         </div>`;
     }
@@ -654,8 +676,8 @@
           <div class="q10-section-title">${icon('activity','q10-section-icon')} Actividades Recientes</div>
           ${result.actividades.map(a => `
             <div class="q10-activity-item">
-              <div class="q10-activity-type">${a.Tipo||'Actividad'}</div>
-              <div class="q10-activity-desc">${a.Descripcion||a.Observaciones||'—'}</div>
+              <div class="q10-activity-type">${htmlText(a.Tipo, 'Actividad')}</div>
+              <div class="q10-activity-desc">${htmlText(a.Descripcion || a.Observaciones)}</div>
               <div class="q10-activity-date">${a.Fecha?new Date(a.Fecha).toLocaleDateString('es'):''}</div>
             </div>`).join('')}
         </div>`;
@@ -665,14 +687,14 @@
       ${phoneHtml(d.Celular||d.Telefono||currentPhone)}
       <span class="q10-contact-type q10-type-oportunidad">${icon('briefcase','q10-section-icon')} Lead / Oportunidad</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${d.Codigo||'—'}</div>
+      <div class="q10-contact-id">ID: ${htmlText(d.Codigo)}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${d.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${d.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${d.Celular||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${d.Estado||d.Etapa||'—'}</span></span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(d.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(d.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(d.Celular)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${htmlText(d.Estado || d.Etapa)}</span></span></div>
         </div>
       </div>
       ${negociosHtml}
@@ -704,18 +726,18 @@
   //  RENDER: CONTACTO
   // ================================================================
   function renderContacto(data) {
-    const name = fullName(data);
+    const name = fullNameHtml(data);
     body().innerHTML = `
       ${phoneHtml(data.Celular||data.Telefono||currentPhone)}
       <span class="q10-contact-type q10-type-contacto">${icon('user','q10-section-icon')} Contacto</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${data.Codigo||'—'} · ${data.Numero_identificacion||''}</div>
+      <div class="q10-contact-id">ID: ${htmlText(data.Codigo)} &middot; ${htmlText(data.Numero_identificacion, '')}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${data.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${data.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${data.Celular||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(data.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(data.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(data.Celular)}</span></div>
         </div>
       </div>
       <div id="q10-tags-notes-container"></div>`;
@@ -824,17 +846,28 @@
               <div class="q10-wizard-step-desc">Registre los datos básicos del nuevo contacto</div>
             </div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="wz-fname" value="${pf.Primer_nombre||''}" placeholder="Nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Segundo Nombre</label><input class="q10-form-input" id="wz-fname2" value="${pf.Segundo_nombre||''}" placeholder="Segundo nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="wz-lname" value="${pf.Primer_apellido||''}" placeholder="Apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${pf.Segundo_apellido||''}" placeholder="Segundo apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación</label><input class="q10-form-input" id="wz-docnum" value="${pf.Numero_identificacion||''}" placeholder="CPF / Cédula / Pasaporte"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${pf.Email||''}" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${wizardState.phone||''}" placeholder="+502 4512-3489"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="wz-fname" value="${htmlAttr(pf.Primer_nombre)}" placeholder="Nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Segundo Nombre</label><input class="q10-form-input" id="wz-fname2" value="${htmlAttr(pf.Segundo_nombre)}" placeholder="Segundo nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="wz-lname" value="${htmlAttr(pf.Primer_apellido)}" placeholder="Apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${htmlAttr(pf.Segundo_apellido)}" placeholder="Segundo apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación *</label><input class="q10-form-input" id="wz-docnum" value="${htmlAttr(pf.Numero_identificacion)}" placeholder="CPF / Cédula / Pasaporte"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${htmlAttr(pf.Email)}" placeholder="email@ejemplo.com"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${htmlAttr(wizardState.phone)}" placeholder="+502 4512-3489"></div>
         `;
         break;
 
-      case 1:
+      case 1: {
+        // BUG-02 fix: use real /tiposidentificacion, /sexos and /programas codes
+        // (previously hardcoded values like "CC", "Masculino" did not match Q10 tenant config).
+        const doctypeOpts = (catalogsCache?.tiposIdentificacion || [])
+          .map(t => `<option value="${escHtml(t.Codigo)}">${escHtml(t.Nombre)} (${escHtml(t.Abreviatura || t.Codigo)})</option>`)
+          .join('');
+        const genderOpts = (catalogsCache?.sexos || [])
+          .map(s => `<option value="${escHtml(s.Codigo_sexo)}">${escHtml(s.Nombre_sexo)}</option>`)
+          .join('');
+        const progOptsCase1 = (catalogsCache?.programas || [])
+          .map(p => `<option value="${escHtml(p.Codigo)}">${escHtml(p.Nombre || p.Codigo)}</option>`)
+          .join('');
         formHtml = `
           <div class="q10-wizard-step-header">
             ${icon('userPlus','q10-wizard-step-icon')}
@@ -844,28 +877,43 @@
             </div>
           </div>
           <div class="q10-info-card" style="margin-bottom:16px;background:#F0FDF4;border-color:#BBF7D0;">
-            <div style="font-size:12px;color:#065F46;">✅ Contacto creado: <strong>${fullName(res.contacto)}</strong></div>
+            <div style="font-size:12px;color:#065F46;">✅ Contacto creado: <strong>${fullNameHtml(res.contacto)}</strong></div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Tipo de Identificación</label>
+          <div class="q10-form-group"><label class="q10-form-label">Tipo de Identificación *</label>
             <select class="q10-form-select" id="wz-doctype">
-              <option value="CC">Cédula de Ciudadanía</option><option value="CE">Cédula de Extranjería</option>
-              <option value="TI">Tarjeta de Identidad</option><option value="PA">Pasaporte</option>
-              <option value="CPF">CPF</option><option value="Otro">Otro</option>
+              <option value="">— Seleccionar —</option>${doctypeOpts || '<option value="" disabled>No hay tipos disponibles</option>'}
             </select>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Fecha de Nacimiento</label><input class="q10-form-input" id="wz-birthdate" type="date"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Género</label>
-            <select class="q10-form-select" id="wz-gender"><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="Otro">Otro</option></select>
+          <div class="q10-form-group"><label class="q10-form-label">Fecha de Nacimiento *</label><input class="q10-form-input" id="wz-birthdate" type="date" required></div>
+          <div class="q10-form-group"><label class="q10-form-label">Género *</label>
+            <select class="q10-form-select" id="wz-gender">
+              <option value="">— Seleccionar —</option>${genderOpts || '<option value="" disabled>No hay datos</option>'}
+            </select>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Dirección</label><input class="q10-form-input" id="wz-address" placeholder="Dirección completa"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Programa *</label>
+            <select class="q10-form-select" id="wz-programa-init">
+              <option value="">— Seleccionar programa —</option>${progOptsCase1 || '<option value="" disabled>No hay programas</option>'}
+            </select>
+          </div>
           <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-est-obs" placeholder="Notas adicionales..."></textarea></div>
         `;
         break;
+      }
 
       case 2:
         {
-          const programasOpts = (catalogsCache?.programas || []).map(p => `<option value="${p.Codigo}">${p.Nombre || p.Descripcion || p.Codigo}</option>`).join('');
-          const periodosOpts = (catalogsCache?.periodos || []).map(p => `<option value="${p.Codigo}">${p.Nombre || p.Descripcion || p.Codigo}</option>`).join('');
+          // BUG-05 fix: /periodos returns `Consecutivo` (int), not `Codigo`. Use correct field.
+          // Pre-selects programa that was chosen in Case 1.
+          const preselectedProg = res.estudiante?.Codigo_programa_inicial;
+          const programasOpts = (catalogsCache?.programas || [])
+            .map(p => `<option value="${escHtml(p.Codigo)}" ${p.Codigo === preselectedProg ? 'selected' : ''}>${escHtml(p.Nombre || p.Codigo)}</option>`)
+            .join('');
+          const periodosOpts = (catalogsCache?.periodos || [])
+            .map(p => `<option value="${escHtml(p.Consecutivo)}">${escHtml(p.Nombre || p.Consecutivo)}</option>`)
+            .join('');
+          const jornadaOpts = (catalogsCache?.jornadas || [])
+            .map(j => `<option value="${escHtml(j.Codigo)}">${escHtml(j.Nombre)}</option>`)
+            .join('');
           formHtml = `
             <div class="q10-wizard-step-header">
               ${icon('book','q10-wizard-step-icon')}
@@ -875,7 +923,7 @@
               </div>
             </div>
             <div class="q10-info-card" style="margin-bottom:16px;background:#F0FDF4;border-color:#BBF7D0;">
-              <div style="font-size:12px;color:#065F46;">✅ Estudiante registrado: <strong>${fullName(res.contacto)}</strong></div>
+              <div style="font-size:12px;color:#065F46;">✅ Estudiante registrado: <strong>${fullNameHtml(res.contacto)}</strong></div>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Programa *</label>
               <select class="q10-form-select" id="wz-programa"><option value="">— Seleccionar programa —</option>${programasOpts || '<option value="" disabled>No hay programas</option>'}</select>
@@ -884,7 +932,7 @@
               <select class="q10-form-select" id="wz-periodo"><option value="">— Seleccionar periodo —</option>${periodosOpts || '<option value="" disabled>No hay periodos</option>'}</select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Jornada</label>
-              <select class="q10-form-select" id="wz-jornada"><option value="Diurna">Diurna</option><option value="Nocturna">Nocturna</option><option value="Sabatina">Sabatina</option><option value="Virtual">Virtual</option></select>
+              <select class="q10-form-select" id="wz-jornada"><option value="">— Seleccionar jornada —</option>${jornadaOpts || '<option value="" disabled>No hay jornadas</option>'}</select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-insc-obs" placeholder="Notas..."></textarea></div>
           `;
@@ -893,8 +941,22 @@
 
       case 3:
         {
+          // BUG-04 fix: /matriculasProgramas schema requires Consecutivo_inscripcion,
+          // Codigo_estudiante, Fecha_matricula, Consecutivo_sede_jornada, Consecutivo_periodo,
+          // Codigo_nivel, Condicion_matricula, Formalizada. Previously plugin sent wrong fields
+          // to a non-existent `createMatricula` handler.
           const progName = catalogsCache?.programas?.find(p => p.Codigo === res.inscripcion?.Codigo_programa)?.Nombre || res.inscripcion?.Codigo_programa || '—';
-          const perName = catalogsCache?.periodos?.find(p => p.Codigo === res.inscripcion?.Codigo_periodo)?.Nombre || res.inscripcion?.Codigo_periodo || '—';
+          const perName = catalogsCache?.periodos?.find(p => p.Consecutivo === res.inscripcion?.Consecutivo_periodo)?.Nombre || res.inscripcion?.Consecutivo_periodo || '—';
+          const nivelOpts = (catalogsCache?.niveles || [])
+            .map(n => `<option value="${escHtml(n.Codigo_nivel)}">${escHtml(n.Nombre_nivel)}</option>`)
+            .join('');
+          const sedejornadaOpts = (catalogsCache?.sedesjornadas || [])
+            .map(sj => `<option value="${escHtml(sj.Consecutivo)}">${escHtml(sj.Sede_jornada || ((sj.Nombre_sede || '') + ' - ' + (sj.Nombre_jornada || '')))}</option>`)
+            .join('');
+          const condicionOpts = (catalogsCache?.condicionesMatricula || [])
+            .map(c => `<option value="${escHtml(c.Codigo)}">${escHtml(c.Nombre)}</option>`)
+            .join('');
+          const todayIso = new Date().toISOString().split('T')[0];
           formHtml = `
             <div class="q10-wizard-step-header">
               ${icon('graduation','q10-wizard-step-icon')}
@@ -907,17 +969,34 @@
               <div style="font-size:12px;color:#065F46;">✅ Inscripción realizada</div>
             </div>
             <div class="q10-section">
-              <div class="q10-section-title">Resumen de Matrícula</div>
+              <div class="q10-section-title">Resumen</div>
               <div class="q10-info-card">
-                <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullName(res.contacto)}</span></div>
-                <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${progName}</span></div>
-                <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${perName}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullNameHtml(res.contacto)}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(progName)}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${htmlText(perName)}</span></div>
               </div>
             </div>
-            <div class="q10-form-group"><label class="q10-form-label">Estado de Matrícula</label>
-              <select class="q10-form-select" id="wz-mat-estado"><option value="Activo">Activo</option><option value="Provisional">Provisional</option></select>
+            <div class="q10-form-group"><label class="q10-form-label">Nivel *</label>
+              <select class="q10-form-select" id="wz-mat-nivel">
+                <option value="">— Seleccionar nivel —</option>${nivelOpts || '<option value="" disabled>No hay niveles</option>'}
+              </select>
             </div>
-            <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-mat-obs" placeholder="Notas..."></textarea></div>
+            <div class="q10-form-group"><label class="q10-form-label">Fecha de Matrícula *</label><input class="q10-form-input" id="wz-mat-fecha" type="date" value="${todayIso}" required></div>
+            <div class="q10-form-group"><label class="q10-form-label">Sede-Jornada *</label>
+              <select class="q10-form-select" id="wz-mat-sedejornada">
+                <option value="">— Seleccionar —</option>${sedejornadaOpts || '<option value="" disabled>No hay sede-jornadas</option>'}
+              </select>
+            </div>
+            <div class="q10-form-group"><label class="q10-form-label">Condición de Matrícula *</label>
+              <select class="q10-form-select" id="wz-mat-condicion">
+                <option value="">— Seleccionar —</option>${condicionOpts || '<option value="" disabled>No hay condiciones</option>'}
+              </select>
+            </div>
+            <div class="q10-form-group">
+              <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#111;cursor:pointer;">
+                <input type="checkbox" id="wz-mat-formalizada" checked> Formalizada
+              </label>
+            </div>
           `;
         }
         break;
@@ -989,50 +1068,90 @@
       switch (step) {
         case 0: {
           const fname = document.getElementById('wz-fname').value.trim();
+          const fname2 = document.getElementById('wz-fname2').value.trim();
           const lname = document.getElementById('wz-lname').value.trim();
+          const lname2 = document.getElementById('wz-lname2').value.trim();
+          const wzDocnum = document.getElementById('wz-docnum').value.trim();
           if (!fname || !lname) throw new Error('Nombre y apellido son obligatorios.');
           const wzEmail = document.getElementById('wz-email').value.trim();
-          const wzCelular = document.getElementById('wz-phone').value.trim();
-          if (!wzEmail && !wzCelular) throw new Error('Informe email ou celular (ao menos um).');
+          const wzCelularRaw = document.getElementById('wz-phone').value.trim();
+          if (!wzEmail && !wzCelularRaw) throw new Error('Informe email ou celular (ao menos um).');
+          // Fail fast: Número de Identificación is required later (Case 1 POST /estudiantes).
+          // Don't create a contact in Q10 the user cannot use later.
+          if (!wzDocnum) throw new Error('Número de Identificación es obligatorio para avanzar al registro de estudiante.');
+          // Q10 Detalle[] only accepts Tipo_detalle="Celular" or "Email"; Celular is capped at 12 digits.
+          // Mirror the logic from the standalone contacto modal (line ~1463).
+          const wzCelularQ10 = wzCelularRaw.replace(/\D/g, '').slice(-12);
           const wzDetalle = [];
           if (wzEmail) wzDetalle.push({ Tipo_detalle: 'Email', Descripcion: wzEmail });
-          if (wzCelular) wzDetalle.push({ Tipo_detalle: 'Telefono', Descripcion: wzCelular });
+          if (wzCelularQ10) wzDetalle.push({ Tipo_detalle: 'Celular', Descripcion: wzCelularQ10 });
           const payload = {
             Consecutivo_oportunidad: 0,
-            Nombres: [fname, document.getElementById('wz-fname2').value.trim()].filter(Boolean).join(' '),
-            Apellidos: [lname, document.getElementById('wz-lname2').value.trim()].filter(Boolean).join(' '),
+            Nombres: [fname, fname2].filter(Boolean).join(' '),
+            Apellidos: [lname, lname2].filter(Boolean).join(' '),
             Detalle: wzDetalle,
           };
           const result = await sendMsg('createContacto', { body: payload });
-          res.contacto = { ...payload, ...result };
+          // Merge API response with payload and individual fields for later wizard steps.
+          // /estudiantes needs Primer_nombre/Primer_apellido separately (BUG-02).
+          res.contacto = {
+            ...payload,
+            ...result,
+            Primer_nombre: fname,
+            Segundo_nombre: fname2 || null,
+            Primer_apellido: lname,
+            Segundo_apellido: lname2 || null,
+            Email: wzEmail,
+            Celular: wzCelularQ10,
+            Numero_identificacion: wzDocnum,
+          };
           showToast('Contacto creado ✓', 'success');
           break;
         }
         case 1: {
+          // BUG-02 fix: POST /estudiantes schema requires these exact fields (validated live):
+          // Primer_nombre, Primer_apellido, Codigo_tipo_identificacion, Numero_identificacion,
+          // Genero, Email, Celular, Fecha_nacimiento, Codigo_programa.
+          // Previously plugin sent `Tipo_identificacion` (wrong name) and posted to /usuarios.
+          const doctype = document.getElementById('wz-doctype').value;
+          const birthdate = document.getElementById('wz-birthdate').value;
+          const gender = document.getElementById('wz-gender').value;
+          const programa = document.getElementById('wz-programa-init').value;
+          if (!doctype) throw new Error('Tipo de Identificación es obligatorio.');
+          if (!birthdate) throw new Error('Fecha de nacimiento es obligatoria.');
+          if (!gender) throw new Error('Género es obligatorio.');
+          if (!programa) throw new Error('Programa es obligatorio.');
+          if (!res.contacto.Numero_identificacion) throw new Error('Número de identificación no fue ingresado en el paso anterior.');
           const payload = {
-            Codigo_contacto: res.contacto.Codigo,
-            Primer_nombre: res.contacto.Primer_nombre, Segundo_nombre: res.contacto.Segundo_nombre,
-            Primer_apellido: res.contacto.Primer_apellido, Segundo_apellido: res.contacto.Segundo_apellido,
+            Primer_nombre: res.contacto.Primer_nombre,
+            Primer_apellido: res.contacto.Primer_apellido,
+            Codigo_tipo_identificacion: doctype,
             Numero_identificacion: res.contacto.Numero_identificacion,
-            Tipo_identificacion: document.getElementById('wz-doctype').value,
-            Email: res.contacto.Email, Celular: res.contacto.Celular,
-            Fecha_nacimiento: document.getElementById('wz-birthdate').value || null,
-            Genero: document.getElementById('wz-gender').value,
-            Direccion: document.getElementById('wz-address').value.trim(),
-            Observaciones: document.getElementById('wz-est-obs').value.trim(),
+            Genero: gender,
+            Email: res.contacto.Email,
+            Celular: res.contacto.Celular,
+            Fecha_nacimiento: birthdate,
+            Codigo_programa: programa,
           };
           const result = await sendMsg('createEstudiante', { body: payload });
-          res.estudiante = { ...payload, ...result };
+          // Track programa selection in wizardState so later steps can default to it.
+          res.estudiante = { ...payload, ...result, Codigo_programa_inicial: programa };
           showToast('Estudiante registrado ✓', 'success');
           break;
         }
         case 2: {
+          // BUG-05 fix: /periodos returns Consecutivo (number). API expects Consecutivo_periodo,
+          // not Codigo_periodo (which was silently ignored before).
           const programa = document.getElementById('wz-programa').value;
           const periodo = document.getElementById('wz-periodo').value;
           if (!programa || !periodo) throw new Error('Seleccione programa y periodo.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
+          if (!codigoEstudiante) throw new Error('Código del estudiante no disponible. Vuelva al paso anterior.');
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo, Codigo_programa: programa,
-            Codigo_periodo: periodo, Jornada: document.getElementById('wz-jornada').value,
+            Codigo_estudiante: codigoEstudiante,
+            Codigo_programa: programa,
+            Consecutivo_periodo: parseInt(periodo, 10),
+            Codigo_jornada: document.getElementById('wz-jornada').value || null,
             Observaciones: document.getElementById('wz-insc-obs').value.trim(),
           };
           const result = await sendMsg('createInscripcion', { body: payload });
@@ -1041,12 +1160,28 @@
           break;
         }
         case 3: {
+          // BUG-04 fix: /matriculasProgramas requires 8 fields (validated live 2026-04-20).
+          const nivel = document.getElementById('wz-mat-nivel').value;
+          const fecha = document.getElementById('wz-mat-fecha').value;
+          const sedeJornada = parseInt(document.getElementById('wz-mat-sedejornada').value, 10);
+          const condicion = document.getElementById('wz-mat-condicion').value.trim();
+          const formalizada = document.getElementById('wz-mat-formalizada').checked;
+          if (!nivel) throw new Error('Seleccione el nivel.');
+          if (!fecha) throw new Error('Fecha de matrícula es obligatoria.');
+          if (!sedeJornada || Number.isNaN(sedeJornada)) throw new Error('Consecutivo sede-jornada es obligatorio.');
+          if (!condicion) throw new Error('Condición de matrícula es obligatoria (valor Q10 exacto).');
+          if (!res.inscripcion?.Consecutivo_inscripcion) throw new Error('Consecutivo de inscripción no disponible del paso anterior.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
+          if (!codigoEstudiante) throw new Error('Código del estudiante no disponible.');
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo,
-            Codigo_programa: res.inscripcion.Codigo_programa,
-            Codigo_periodo: res.inscripcion.Codigo_periodo,
-            Estado: document.getElementById('wz-mat-estado').value,
-            Observaciones: document.getElementById('wz-mat-obs').value.trim(),
+            Consecutivo_inscripcion: res.inscripcion.Consecutivo_inscripcion,
+            Codigo_estudiante: codigoEstudiante,
+            Fecha_matricula: fecha,
+            Consecutivo_sede_jornada: sedeJornada,
+            Consecutivo_periodo: res.inscripcion.Consecutivo_periodo,
+            Codigo_nivel: nivel,
+            Condicion_matricula: condicion,
+            Formalizada: formalizada,
           };
           const result = await sendMsg('createMatricula', { body: payload });
           res.matricula = { ...payload, ...result };
@@ -1054,18 +1189,33 @@
           break;
         }
         case 4: {
+          // BUG-06: /ordenespago requires modelo financiero activo on the Q10 tenant.
+          // If not available (e.g. geniusidiomas tenant), show friendly message instead of error.
           const concepto = document.getElementById('wz-cobro-concepto').value.trim();
           const valor = document.getElementById('wz-cobro-valor').value;
           const fecha = document.getElementById('wz-cobro-fecha').value;
           if (!concepto || !valor || !fecha) throw new Error('Concepto, valor y fecha son obligatorios.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo, Concepto: concepto,
-            Valor: parseFloat(valor), Fecha_vencimiento: fecha,
+            Codigo_estudiante: codigoEstudiante,
+            Concepto: concepto,
+            Valor: parseFloat(valor),
+            Fecha_vencimiento: fecha,
             Observaciones: document.getElementById('wz-cobro-obs').value.trim(),
           };
-          const result = await sendMsg('createOrdenPago', { body: payload });
-          res.cobro = { ...payload, ...result };
-          showToast('Orden de pago generada ✓', 'success');
+          try {
+            const result = await sendMsg('createOrdenPago', { body: payload });
+            res.cobro = { ...payload, ...result };
+            showToast('Orden de pago generada ✓', 'success');
+          } catch (e) {
+            if (e && e.message && /modelo financiero/i.test(e.message)) {
+              // Tenant sem modelo financeiro configurado — completa matrícula sem cobro.
+              res.cobro = { skipped: true, reason: 'modelo_financiero_ausente' };
+              showToast('Cobro no disponible: esta institución no tiene modelo financiero Q10. Matrícula completada sin orden de pago.', 'info');
+            } else {
+              throw e;
+            }
+          }
           renderWizardComplete();
           return;
         }
@@ -1096,9 +1246,9 @@
       <div class="q10-section">
         <div class="q10-section-title">Resumen</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullName(res.contacto)}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${progName}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-green">${res.matricula?.Estado||'Activo'}</span></span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullNameHtml(res.contacto)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(progName)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-green">${htmlText(res.matricula?.Estado, 'Activo')}</span></span></div>
           ${res.cobro ? `<div class="q10-info-row"><span class="q10-info-label">Cobro</span><span class="q10-info-value">${fmtMoney(res.cobro.Valor)}</span></div>` : ''}
         </div>
       </div>
@@ -1140,7 +1290,7 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-info-card" style="margin-bottom:14px;background:#F0F9FF;border-color:#BAE6FD;">
-            <div style="font-size:12px;color:#0369A1;">Alumno: <strong>${fullName(studentData)}</strong></div>
+            <div style="font-size:12px;color:#0369A1;">Alumno: <strong>${fullNameHtml(studentData)}</strong></div>
           </div>
           <div class="q10-form-group"><label class="q10-form-label">Concepto *</label><input class="q10-form-input" id="q10-cobro-concepto" placeholder="Ej: Mensualidad, Material"></div>
           <div class="q10-form-group"><label class="q10-form-label">Valor *</label><input class="q10-form-input" id="q10-cobro-valor" type="number" min="0" step="0.01" placeholder="0.00"></div>
@@ -1194,11 +1344,11 @@
         <div class="q10-modal-body">
           <div class="q10-form-group">
             <label class="q10-form-label">Nome do Lead *</label>
-            <input class="q10-form-input" id="q10-op-nome" value="${prefillName}" placeholder="Ex: João Silva — Inglês Básico">
+            <input class="q10-form-input" id="q10-op-nome" value="${htmlAttr(prefillName)}" placeholder="Ex: João Silva — Inglês Básico">
           </div>
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${prefillPhone}" placeholder="19988145438"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${prefillEmail}" placeholder="email@ejemplo.com"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${htmlAttr(prefillPhone)}" placeholder="19988145438"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${htmlAttr(prefillEmail)}" placeholder="email@ejemplo.com"></div>
           </div>
           <div class="q10-form-row">
             <div class="q10-form-group">
@@ -1229,12 +1379,12 @@
 
       pubSel.innerHTML = '<option value="">— Como conheceu? —</option>' +
         (data.mediospublicitarios || []).map(m =>
-          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+          `<option value="${escHtml(m.Consecutivo)}">${escHtml(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
         ).join('');
 
       ctcSel.innerHTML = '<option value="">— Canal —</option>' +
         (data.medioscontacto || []).map(m =>
-          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+          `<option value="${escHtml(m.Consecutivo)}">${escHtml(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
         ).join('');
 
       // Auto-select WhatsApp if found
@@ -1280,6 +1430,8 @@
     if (!detectedName) detectedName = currentContactName;
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
+    const detectedFirstNames = detectedName ? detectedName.split(' ').slice(0,2).join(' ') : '';
+    const detectedLastNames = detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '';
     overlay.innerHTML = `
       <div class="q10-modal q10-modal-wide">
         <div class="q10-modal-header">
@@ -1288,11 +1440,11 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellidos"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${htmlAttr(detectedFirstNames)}" placeholder="Primer y segundo nombre"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${htmlAttr(detectedLastNames)}" placeholder="Apellidos"></div>
           </div>
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${htmlAttr(phone)}" placeholder="+55 11 99999-9999"></div>
             <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
           </div>
           <p style="font-size:11px;color:#6B7280;margin:0 0 4px">* Informe ao menos celular ou email</p>
@@ -1363,7 +1515,18 @@
 
   function showCreateActividadModal(contactData) {
     removeModal();
+    // BUG-03 fix: /actividades schema discovered via live probing (2026-04-20):
+    //   Consecutivo_negocio (int, from existing oportunidad),
+    //   Estado_actividad: "C" = Completada (requires Resultado_actividad)
+    //                     "P" = Programada (requires Descripcion_actividad),
+    //   Tipo_actividad (enum, no API endpoint — values hardcoded from Q10 UI):
+    //     Llamada, WhatsApp, Correo, Nota, Reunión
+    //   Numero_identificacion_asesor (auto-injected by SW from storage),
+    //   Fecha_actividad (auto-set to today by SW if missing).
     const overlay = el('div', 'q10-modal-overlay');
+    const presetNegocio = contactData?.Consecutivo_negocio || contactData?.Negocio_favorito?.Consecutivo_negocio || '';
+    const TIPOS_ACTIVIDAD = ['Llamada', 'WhatsApp', 'Correo', 'Nota', 'Reunión'];
+    const tipoOpts = TIPOS_ACTIVIDAD.map(t => `<option value="${htmlAttr(t)}" ${t === 'WhatsApp' ? 'selected' : ''}>${htmlText(t)}</option>`).join('');
     overlay.innerHTML = `
       <div class="q10-modal">
         <div class="q10-modal-header">
@@ -1371,13 +1534,29 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
-            <select class="q10-form-select" id="q10-act-type">
-              <option value="Llamada">Llamada</option><option value="WhatsApp" selected>WhatsApp</option>
-              <option value="Email">Email</option><option value="Reunión">Reunión</option><option value="Otro">Otro</option>
-            </select>
+          <div class="q10-form-group"><label class="q10-form-label">Consecutivo Negocio *</label>
+            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${htmlAttr(presetNegocio)}" placeholder="ID del negocio (ver oportunidad primero)">
+            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Cree una oportunidad en el contacto antes de registrar actividades; el ID del Primer Negocio aparece en la respuesta.</div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Descripción *</label><textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la interacción..."></textarea></div>
+          <div class="q10-form-group"><label class="q10-form-label">Estado *</label>
+            <div style="display:flex;gap:16px;margin-top:4px;">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                <input type="radio" name="q10-act-estado" value="C" checked> Completada
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
+                <input type="radio" name="q10-act-estado" value="P"> Programada
+              </label>
+            </div>
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
+            <select class="q10-form-select" id="q10-act-type">${tipoOpts}</select>
+          </div>
+          <div class="q10-form-group" id="q10-act-resultado-wrap"><label class="q10-form-label">Resultado *</label>
+            <textarea class="q10-form-textarea" id="q10-act-resultado" placeholder="Resultado de la interacción (ej: cliente interesado, a pedido agendar presentación)"></textarea>
+          </div>
+          <div class="q10-form-group" id="q10-act-desc-wrap" style="display:none;"><label class="q10-form-label">Descripción *</label>
+            <textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la actividad programada"></textarea>
+          </div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1389,13 +1568,36 @@
     overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
     overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+    // Toggle Resultado vs Descripción based on Estado (C=Completada, P=Programada)
+    overlay.querySelectorAll('input[name="q10-act-estado"]').forEach(radio => {
+      radio.addEventListener('change', (ev) => {
+        const isCompletada = ev.target.value === 'C';
+        document.getElementById('q10-act-resultado-wrap').style.display = isCompletada ? '' : 'none';
+        document.getElementById('q10-act-desc-wrap').style.display = isCompletada ? 'none' : '';
+      });
+    });
+
     document.getElementById('q10-act-submit').addEventListener('click', async () => {
+      const negocio = parseInt(document.getElementById('q10-act-negocio').value, 10);
+      const tipo = document.getElementById('q10-act-type').value;
+      const estado = overlay.querySelector('input[name="q10-act-estado"]:checked').value;
+      const resultado = document.getElementById('q10-act-resultado').value.trim();
       const desc = document.getElementById('q10-act-desc').value.trim();
-      if (!desc) { showToast('Descripción obligatoria', 'error'); return; }
+      if (!negocio || Number.isNaN(negocio)) { showToast('Consecutivo negocio obligatorio', 'error'); return; }
+      if (estado === 'C' && !resultado) { showToast('Resultado obligatorio para actividades completadas', 'error'); return; }
+      if (estado === 'P' && !desc) { showToast('Descripción obligatoria para actividades programadas', 'error'); return; }
       const btn = document.getElementById('q10-act-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
       try {
-        await sendMsg('createActividad', { body: { Tipo: document.getElementById('q10-act-type').value, Descripcion: desc, Fecha: new Date().toISOString(), Codigo_oportunidad: contactData?.Codigo || null, Observaciones: `Contacto: ${fullName(contactData)} | WhatsApp` } });
+        // Numero_identificacion_asesor and Fecha_actividad are auto-injected by service-worker.
+        const body = {
+          Consecutivo_negocio: negocio,
+          Tipo_actividad: tipo,
+          Estado_actividad: estado, // "C" or "P"
+        };
+        if (estado === 'C') body.Resultado_actividad = resultado;
+        else body.Descripcion_actividad = desc;
+        await sendMsg('createActividad', { body });
         showToast('Actividad registrada ✓', 'success');
         removeModal();
       } catch (err) {
