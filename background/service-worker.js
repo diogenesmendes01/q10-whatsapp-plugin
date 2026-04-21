@@ -4,7 +4,8 @@
    v2.3 — Real Q10 API (no mocks)
    ============================================================ */
 
-const API_BASE = 'https://geniusidiomas.com/api/q10';
+// Default API base — overridable per tenant via options page
+const DEFAULT_API_BASE = 'https://geniusidiomas.com/api/q10';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CACHE_TTL_SHORT = 60 * 1000; // 1 min for financial data
 
@@ -32,6 +33,17 @@ function setCache(key, data) {
 // ---------- Side Panel setup ----------
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+
+// ---------- API base URL (tenant-configurable) ----------
+
+let apiBaseUrl = null; // cached in memory after first load
+
+async function getApiBaseUrl() {
+  if (apiBaseUrl) return apiBaseUrl;
+  const result = await chrome.storage.local.get(['apiBaseUrl']);
+  apiBaseUrl = (result.apiBaseUrl || '').trim() || DEFAULT_API_BASE;
+  return apiBaseUrl;
+}
 
 // ---------- API helpers ----------
 
@@ -116,8 +128,11 @@ function phoneMatches(contactPhone, searchPhone) {
   if (a === b) return true;
   // One contains the other (handles country code differences)
   if (a.endsWith(b) || b.endsWith(a)) return true;
-  // Last 8 digits match (handles varying country code + area code formats)
-  if (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8)) return true;
+  // Last 9 digits match (avoids false positives for Brazilian numbers where
+  // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
+  // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
+  // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
+  if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
   return false;
 }
 
