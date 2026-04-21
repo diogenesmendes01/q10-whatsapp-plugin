@@ -78,8 +78,9 @@
       .replace(/'/g, '&#39;');
   }
 
-  function htmlText(value, fallback = '&mdash;') {
-    return value === undefined || value === null || value === '' ? fallback : escHtml(value);
+  function htmlText(value, fallback = '\u2014') {
+    const text = value === undefined || value === null || value === '' ? fallback : value;
+    return escHtml(text);
   }
 
   function htmlAttr(value) {
@@ -312,7 +313,7 @@
           ${notes.map(n => `
             <div class="q10-note-card" data-note-id="${htmlAttr(n.id)}">
               <div class="q10-note-date">${htmlText(n.date, '')}</div>
-              <div class="q10-note-text">${escapeHtml(n.text)}</div>
+              <div class="q10-note-text">${htmlText(n.text, '')}</div>
               <button class="q10-note-delete" data-note-id="${htmlAttr(n.id)}" data-contact="${contactAttr}">✕</button>
             </div>
           `).join('')}
@@ -320,12 +321,6 @@
         </div>
       </div>
     `;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
   }
 
   // Attach tags and notes sections + event handlers to the current view
