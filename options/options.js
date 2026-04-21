@@ -35,13 +35,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load current key
-  chrome.storage.sync.get(['q10ApiKey'], (result) => {
+  // Load current key and asesor ID
+  chrome.storage.sync.get(['q10ApiKey', 'q10AsesorId'], (result) => {
     if (result.q10ApiKey) {
       input.value = result.q10ApiKey;
       updateStatus(true);
     }
+    const asesorInput = document.getElementById('asesor-id-input');
+    if (asesorInput && result.q10AsesorId) {
+      asesorInput.value = result.q10AsesorId;
+    }
   });
+
+  // Save asesor ID (Numero_identificacion_asesor) — required for /oportunidades and /actividades
+  const btnSaveAsesor = document.getElementById('btn-save-asesor');
+  if (btnSaveAsesor) {
+    btnSaveAsesor.addEventListener('click', () => {
+      const asesorInput = document.getElementById('asesor-id-input');
+      const asesorId = (asesorInput.value || '').trim();
+      if (!asesorId) {
+        showAlert('error', 'Informe a identificación del asesor');
+        return;
+      }
+      btnSaveAsesor.disabled = true;
+      btnSaveAsesor.textContent = 'Salvando...';
+      chrome.storage.sync.set({ q10AsesorId: asesorId }, () => {
+        if (chrome.runtime.lastError) {
+          showAlert('error', 'Erro ao salvar: ' + chrome.runtime.lastError.message);
+        } else {
+          showAlert('success', 'Asesor salvo com sucesso!');
+        }
+        btnSaveAsesor.disabled = false;
+        btnSaveAsesor.textContent = '💾 Salvar Asesor';
+      });
+    });
+  }
 
   // Save
   btnSave.addEventListener('click', () => {

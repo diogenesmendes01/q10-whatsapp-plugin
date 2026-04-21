@@ -834,7 +834,18 @@
         `;
         break;
 
-      case 1:
+      case 1: {
+        // BUG-02 fix: use real /tiposidentificacion, /sexos and /programas codes
+        // (previously hardcoded values like "CC", "Masculino" did not match Q10 tenant config).
+        const doctypeOpts = (catalogsCache?.tiposIdentificacion || [])
+          .map(t => `<option value="${t.Codigo}">${t.Nombre} (${t.Abreviatura || t.Codigo})</option>`)
+          .join('');
+        const genderOpts = (catalogsCache?.sexos || [])
+          .map(s => `<option value="${s.Codigo_sexo}">${s.Nombre_sexo}</option>`)
+          .join('');
+        const progOptsCase1 = (catalogsCache?.programas || [])
+          .map(p => `<option value="${p.Codigo}">${p.Nombre || p.Codigo}</option>`)
+          .join('');
         formHtml = `
           <div class="q10-wizard-step-header">
             ${icon('userPlus','q10-wizard-step-icon')}
@@ -846,26 +857,41 @@
           <div class="q10-info-card" style="margin-bottom:16px;background:#F0FDF4;border-color:#BBF7D0;">
             <div style="font-size:12px;color:#065F46;">✅ Contacto creado: <strong>${fullName(res.contacto)}</strong></div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Tipo de Identificación</label>
+          <div class="q10-form-group"><label class="q10-form-label">Tipo de Identificación *</label>
             <select class="q10-form-select" id="wz-doctype">
-              <option value="CC">Cédula de Ciudadanía</option><option value="CE">Cédula de Extranjería</option>
-              <option value="TI">Tarjeta de Identidad</option><option value="PA">Pasaporte</option>
-              <option value="CPF">CPF</option><option value="Otro">Otro</option>
+              <option value="">— Seleccionar —</option>${doctypeOpts || '<option value="" disabled>No hay tipos disponibles</option>'}
             </select>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Fecha de Nacimiento</label><input class="q10-form-input" id="wz-birthdate" type="date"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Género</label>
-            <select class="q10-form-select" id="wz-gender"><option value="Masculino">Masculino</option><option value="Femenino">Femenino</option><option value="Otro">Otro</option></select>
+          <div class="q10-form-group"><label class="q10-form-label">Fecha de Nacimiento *</label><input class="q10-form-input" id="wz-birthdate" type="date" required></div>
+          <div class="q10-form-group"><label class="q10-form-label">Género *</label>
+            <select class="q10-form-select" id="wz-gender">
+              <option value="">— Seleccionar —</option>${genderOpts || '<option value="" disabled>No hay datos</option>'}
+            </select>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Dirección</label><input class="q10-form-input" id="wz-address" placeholder="Dirección completa"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Programa *</label>
+            <select class="q10-form-select" id="wz-programa-init">
+              <option value="">— Seleccionar programa —</option>${progOptsCase1 || '<option value="" disabled>No hay programas</option>'}
+            </select>
+          </div>
           <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-est-obs" placeholder="Notas adicionales..."></textarea></div>
         `;
         break;
+      }
 
       case 2:
         {
-          const programasOpts = (catalogsCache?.programas || []).map(p => `<option value="${p.Codigo}">${p.Nombre || p.Descripcion || p.Codigo}</option>`).join('');
-          const periodosOpts = (catalogsCache?.periodos || []).map(p => `<option value="${p.Codigo}">${p.Nombre || p.Descripcion || p.Codigo}</option>`).join('');
+          // BUG-05 fix: /periodos returns `Consecutivo` (int), not `Codigo`. Use correct field.
+          // Pre-selects programa that was chosen in Case 1.
+          const preselectedProg = res.estudiante?.Codigo_programa_inicial;
+          const programasOpts = (catalogsCache?.programas || [])
+            .map(p => `<option value="${p.Codigo}" ${p.Codigo === preselectedProg ? 'selected' : ''}>${p.Nombre || p.Codigo}</option>`)
+            .join('');
+          const periodosOpts = (catalogsCache?.periodos || [])
+            .map(p => `<option value="${p.Consecutivo}">${p.Nombre || p.Consecutivo}</option>`)
+            .join('');
+          const jornadaOpts = (catalogsCache?.jornadas || [])
+            .map(j => `<option value="${j.Codigo}">${j.Nombre}</option>`)
+            .join('');
           formHtml = `
             <div class="q10-wizard-step-header">
               ${icon('book','q10-wizard-step-icon')}
@@ -884,7 +910,7 @@
               <select class="q10-form-select" id="wz-periodo"><option value="">— Seleccionar periodo —</option>${periodosOpts || '<option value="" disabled>No hay periodos</option>'}</select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Jornada</label>
-              <select class="q10-form-select" id="wz-jornada"><option value="Diurna">Diurna</option><option value="Nocturna">Nocturna</option><option value="Sabatina">Sabatina</option><option value="Virtual">Virtual</option></select>
+              <select class="q10-form-select" id="wz-jornada"><option value="">— Seleccionar jornada —</option>${jornadaOpts || '<option value="" disabled>No hay jornadas</option>'}</select>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-insc-obs" placeholder="Notas..."></textarea></div>
           `;
@@ -893,8 +919,16 @@
 
       case 3:
         {
+          // BUG-04 fix: /matriculasProgramas schema requires Consecutivo_inscripcion,
+          // Codigo_estudiante, Fecha_matricula, Consecutivo_sede_jornada, Consecutivo_periodo,
+          // Codigo_nivel, Condicion_matricula, Formalizada. Previously plugin sent wrong fields
+          // to a non-existent `createMatricula` handler.
           const progName = catalogsCache?.programas?.find(p => p.Codigo === res.inscripcion?.Codigo_programa)?.Nombre || res.inscripcion?.Codigo_programa || '—';
-          const perName = catalogsCache?.periodos?.find(p => p.Codigo === res.inscripcion?.Codigo_periodo)?.Nombre || res.inscripcion?.Codigo_periodo || '—';
+          const perName = catalogsCache?.periodos?.find(p => p.Consecutivo === res.inscripcion?.Consecutivo_periodo)?.Nombre || res.inscripcion?.Consecutivo_periodo || '—';
+          const nivelOpts = (catalogsCache?.niveles || [])
+            .map(n => `<option value="${n.Codigo_nivel}">${n.Nombre_nivel}</option>`)
+            .join('');
+          const todayIso = new Date().toISOString().split('T')[0];
           formHtml = `
             <div class="q10-wizard-step-header">
               ${icon('graduation','q10-wizard-step-icon')}
@@ -907,17 +941,32 @@
               <div style="font-size:12px;color:#065F46;">✅ Inscripción realizada</div>
             </div>
             <div class="q10-section">
-              <div class="q10-section-title">Resumen de Matrícula</div>
+              <div class="q10-section-title">Resumen</div>
               <div class="q10-info-card">
                 <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullName(res.contacto)}</span></div>
                 <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${progName}</span></div>
                 <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${perName}</span></div>
               </div>
             </div>
-            <div class="q10-form-group"><label class="q10-form-label">Estado de Matrícula</label>
-              <select class="q10-form-select" id="wz-mat-estado"><option value="Activo">Activo</option><option value="Provisional">Provisional</option></select>
+            <div class="q10-form-group"><label class="q10-form-label">Nivel *</label>
+              <select class="q10-form-select" id="wz-mat-nivel">
+                <option value="">— Seleccionar nivel —</option>${nivelOpts || '<option value="" disabled>No hay niveles</option>'}
+              </select>
             </div>
-            <div class="q10-form-group"><label class="q10-form-label">Observaciones</label><textarea class="q10-form-textarea" id="wz-mat-obs" placeholder="Notas..."></textarea></div>
+            <div class="q10-form-group"><label class="q10-form-label">Fecha de Matrícula *</label><input class="q10-form-input" id="wz-mat-fecha" type="date" value="${todayIso}" required></div>
+            <div class="q10-form-group"><label class="q10-form-label">Consecutivo Sede-Jornada *</label>
+              <input class="q10-form-input" id="wz-mat-sedejornada" type="number" min="1" placeholder="Ej: 1 (consulte en Q10)" value="1">
+              <div style="font-size:11px;color:#6B7280;margin-top:4px;">ID del registro sede-jornada en Q10. Consulte /cursos → Consecutivo_sede_jornada.</div>
+            </div>
+            <div class="q10-form-group"><label class="q10-form-label">Condición de Matrícula *</label>
+              <input class="q10-form-input" id="wz-mat-condicion" placeholder="Valor exacto desde Q10 UI">
+              <div style="font-size:11px;color:#6B7280;margin-top:4px;">Enum Q10 (ej.: "Nuevo"/"Antiguo"). Valor exato vindo da UI Q10.</div>
+            </div>
+            <div class="q10-form-group">
+              <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#111;cursor:pointer;">
+                <input type="checkbox" id="wz-mat-formalizada" checked> Formalizada
+              </label>
+            </div>
           `;
         }
         break;
@@ -989,7 +1038,10 @@
       switch (step) {
         case 0: {
           const fname = document.getElementById('wz-fname').value.trim();
+          const fname2 = document.getElementById('wz-fname2').value.trim();
           const lname = document.getElementById('wz-lname').value.trim();
+          const lname2 = document.getElementById('wz-lname2').value.trim();
+          const wzDocnum = document.getElementById('wz-docnum').value.trim();
           if (!fname || !lname) throw new Error('Nombre y apellido son obligatorios.');
           const wzEmail = document.getElementById('wz-email').value.trim();
           const wzCelular = document.getElementById('wz-phone').value.trim();
@@ -999,40 +1051,71 @@
           if (wzCelular) wzDetalle.push({ Tipo_detalle: 'Telefono', Descripcion: wzCelular });
           const payload = {
             Consecutivo_oportunidad: 0,
-            Nombres: [fname, document.getElementById('wz-fname2').value.trim()].filter(Boolean).join(' '),
-            Apellidos: [lname, document.getElementById('wz-lname2').value.trim()].filter(Boolean).join(' '),
+            Nombres: [fname, fname2].filter(Boolean).join(' '),
+            Apellidos: [lname, lname2].filter(Boolean).join(' '),
             Detalle: wzDetalle,
           };
           const result = await sendMsg('createContacto', { body: payload });
-          res.contacto = { ...payload, ...result };
+          // Merge API response with payload and individual fields for later wizard steps.
+          // /estudiantes needs Primer_nombre/Primer_apellido separately (BUG-02).
+          res.contacto = {
+            ...payload,
+            ...result,
+            Primer_nombre: fname,
+            Segundo_nombre: fname2 || null,
+            Primer_apellido: lname,
+            Segundo_apellido: lname2 || null,
+            Email: wzEmail,
+            Celular: wzCelular,
+            Numero_identificacion: wzDocnum,
+          };
           showToast('Contacto creado ✓', 'success');
           break;
         }
         case 1: {
+          // BUG-02 fix: POST /estudiantes schema requires these exact fields (validated live):
+          // Primer_nombre, Primer_apellido, Codigo_tipo_identificacion, Numero_identificacion,
+          // Genero, Email, Celular, Fecha_nacimiento, Codigo_programa.
+          // Previously plugin sent `Tipo_identificacion` (wrong name) and posted to /usuarios.
+          const doctype = document.getElementById('wz-doctype').value;
+          const birthdate = document.getElementById('wz-birthdate').value;
+          const gender = document.getElementById('wz-gender').value;
+          const programa = document.getElementById('wz-programa-init').value;
+          if (!doctype) throw new Error('Tipo de Identificación es obligatorio.');
+          if (!birthdate) throw new Error('Fecha de nacimiento es obligatoria.');
+          if (!gender) throw new Error('Género es obligatorio.');
+          if (!programa) throw new Error('Programa es obligatorio.');
+          if (!res.contacto.Numero_identificacion) throw new Error('Número de identificación no fue ingresado en el paso anterior.');
           const payload = {
-            Codigo_contacto: res.contacto.Codigo,
-            Primer_nombre: res.contacto.Primer_nombre, Segundo_nombre: res.contacto.Segundo_nombre,
-            Primer_apellido: res.contacto.Primer_apellido, Segundo_apellido: res.contacto.Segundo_apellido,
+            Primer_nombre: res.contacto.Primer_nombre,
+            Primer_apellido: res.contacto.Primer_apellido,
+            Codigo_tipo_identificacion: doctype,
             Numero_identificacion: res.contacto.Numero_identificacion,
-            Tipo_identificacion: document.getElementById('wz-doctype').value,
-            Email: res.contacto.Email, Celular: res.contacto.Celular,
-            Fecha_nacimiento: document.getElementById('wz-birthdate').value || null,
-            Genero: document.getElementById('wz-gender').value,
-            Direccion: document.getElementById('wz-address').value.trim(),
-            Observaciones: document.getElementById('wz-est-obs').value.trim(),
+            Genero: gender,
+            Email: res.contacto.Email,
+            Celular: res.contacto.Celular,
+            Fecha_nacimiento: birthdate,
+            Codigo_programa: programa,
           };
           const result = await sendMsg('createEstudiante', { body: payload });
-          res.estudiante = { ...payload, ...result };
+          // Track programa selection in wizardState so later steps can default to it.
+          res.estudiante = { ...payload, ...result, Codigo_programa_inicial: programa };
           showToast('Estudiante registrado ✓', 'success');
           break;
         }
         case 2: {
+          // BUG-05 fix: /periodos returns Consecutivo (number). API expects Consecutivo_periodo,
+          // not Codigo_periodo (which was silently ignored before).
           const programa = document.getElementById('wz-programa').value;
           const periodo = document.getElementById('wz-periodo').value;
           if (!programa || !periodo) throw new Error('Seleccione programa y periodo.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
+          if (!codigoEstudiante) throw new Error('Código del estudiante no disponible. Vuelva al paso anterior.');
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo, Codigo_programa: programa,
-            Codigo_periodo: periodo, Jornada: document.getElementById('wz-jornada').value,
+            Codigo_estudiante: codigoEstudiante,
+            Codigo_programa: programa,
+            Consecutivo_periodo: parseInt(periodo, 10),
+            Codigo_jornada: document.getElementById('wz-jornada').value || null,
             Observaciones: document.getElementById('wz-insc-obs').value.trim(),
           };
           const result = await sendMsg('createInscripcion', { body: payload });
@@ -1041,12 +1124,28 @@
           break;
         }
         case 3: {
+          // BUG-04 fix: /matriculasProgramas requires 8 fields (validated live 2026-04-20).
+          const nivel = document.getElementById('wz-mat-nivel').value;
+          const fecha = document.getElementById('wz-mat-fecha').value;
+          const sedeJornada = parseInt(document.getElementById('wz-mat-sedejornada').value, 10);
+          const condicion = document.getElementById('wz-mat-condicion').value.trim();
+          const formalizada = document.getElementById('wz-mat-formalizada').checked;
+          if (!nivel) throw new Error('Seleccione el nivel.');
+          if (!fecha) throw new Error('Fecha de matrícula es obligatoria.');
+          if (!sedeJornada || Number.isNaN(sedeJornada)) throw new Error('Consecutivo sede-jornada es obligatorio.');
+          if (!condicion) throw new Error('Condición de matrícula es obligatoria (valor Q10 exacto).');
+          if (!res.inscripcion?.Consecutivo_inscripcion) throw new Error('Consecutivo de inscripción no disponible del paso anterior.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
+          if (!codigoEstudiante) throw new Error('Código del estudiante no disponible.');
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo,
-            Codigo_programa: res.inscripcion.Codigo_programa,
-            Codigo_periodo: res.inscripcion.Codigo_periodo,
-            Estado: document.getElementById('wz-mat-estado').value,
-            Observaciones: document.getElementById('wz-mat-obs').value.trim(),
+            Consecutivo_inscripcion: res.inscripcion.Consecutivo_inscripcion,
+            Codigo_estudiante: codigoEstudiante,
+            Fecha_matricula: fecha,
+            Consecutivo_sede_jornada: sedeJornada,
+            Consecutivo_periodo: res.inscripcion.Consecutivo_periodo,
+            Codigo_nivel: nivel,
+            Condicion_matricula: condicion,
+            Formalizada: formalizada,
           };
           const result = await sendMsg('createMatricula', { body: payload });
           res.matricula = { ...payload, ...result };
@@ -1054,18 +1153,33 @@
           break;
         }
         case 4: {
+          // BUG-06: /ordenespago requires modelo financiero activo on the Q10 tenant.
+          // If not available (e.g. geniusidiomas tenant), show friendly message instead of error.
           const concepto = document.getElementById('wz-cobro-concepto').value.trim();
           const valor = document.getElementById('wz-cobro-valor').value;
           const fecha = document.getElementById('wz-cobro-fecha').value;
           if (!concepto || !valor || !fecha) throw new Error('Concepto, valor y fecha son obligatorios.');
+          const codigoEstudiante = res.estudiante.Codigo_estudiante || res.estudiante.Codigo;
           const payload = {
-            Codigo_estudiante: res.estudiante.Codigo, Concepto: concepto,
-            Valor: parseFloat(valor), Fecha_vencimiento: fecha,
+            Codigo_estudiante: codigoEstudiante,
+            Concepto: concepto,
+            Valor: parseFloat(valor),
+            Fecha_vencimiento: fecha,
             Observaciones: document.getElementById('wz-cobro-obs').value.trim(),
           };
-          const result = await sendMsg('createOrdenPago', { body: payload });
-          res.cobro = { ...payload, ...result };
-          showToast('Orden de pago generada ✓', 'success');
+          try {
+            const result = await sendMsg('createOrdenPago', { body: payload });
+            res.cobro = { ...payload, ...result };
+            showToast('Orden de pago generada ✓', 'success');
+          } catch (e) {
+            if (e && e.message && /modelo financiero/i.test(e.message)) {
+              // Tenant sem modelo financeiro configurado — completa matrícula sem cobro.
+              res.cobro = { skipped: true, reason: 'modelo_financiero_ausente' };
+              showToast('Cobro no disponible: esta institución no tiene modelo financiero Q10. Matrícula completada sin orden de pago.', 'info');
+            } else {
+              throw e;
+            }
+          }
           renderWizardComplete();
           return;
         }
@@ -1363,7 +1477,13 @@
 
   function showCreateActividadModal(contactData) {
     removeModal();
+    // BUG-03 fix: /actividades schema is Consecutivo_negocio, Estado_actividad, Tipo_actividad,
+    // Numero_identificacion_asesor, Fecha_actividad. Previously plugin sent Tipo/Descripcion/
+    // Fecha/Codigo_oportunidad/Observaciones which all 400'd silently.
+    // Valid enum values for Estado_actividad / Tipo_actividad must be copied from Q10 UI — the
+    // API doesn't expose them and brute-force probing (Pendiente/Realizada/Abierta/etc.) all fail.
     const overlay = el('div', 'q10-modal-overlay');
+    const presetNegocio = contactData?.Consecutivo_negocio || '';
     overlay.innerHTML = `
       <div class="q10-modal">
         <div class="q10-modal-header">
@@ -1371,13 +1491,19 @@
           <button class="q10-modal-close-btn">${ICONS.close}</button>
         </div>
         <div class="q10-modal-body">
-          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
-            <select class="q10-form-select" id="q10-act-type">
-              <option value="Llamada">Llamada</option><option value="WhatsApp" selected>WhatsApp</option>
-              <option value="Email">Email</option><option value="Reunión">Reunión</option><option value="Otro">Otro</option>
-            </select>
+          <div class="q10-form-group"><label class="q10-form-label">Consecutivo Negocio *</label>
+            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${presetNegocio}" placeholder="ID del negocio (crear una oportunidad primero)">
+            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Q10 requiere un negocio existente. Cree una oportunidad en el contacto antes de registrar actividades.</div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Descripción *</label><textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la interacción..."></textarea></div>
+          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
+            <input class="q10-form-input" id="q10-act-type" placeholder="Valor exacto del enum Q10 (ej: Llamada)" value="WhatsApp">
+            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Use el valor exacto configurado en Q10. Ejemplo: "Llamada", "Correo electrónico".</div>
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Estado *</label>
+            <input class="q10-form-input" id="q10-act-estado" placeholder="Valor exacto del enum (ej: Pendiente)" value="">
+            <div style="font-size:11px;color:#6B7280;margin-top:4px;">Valor exacto del enum Estado_actividad desde Q10.</div>
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Descripción</label><textarea class="q10-form-textarea" id="q10-act-desc" placeholder="Detalle de la interacción..."></textarea></div>
         </div>
         <div class="q10-modal-footer">
           <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -1391,11 +1517,22 @@
 
     document.getElementById('q10-act-submit').addEventListener('click', async () => {
       const desc = document.getElementById('q10-act-desc').value.trim();
-      if (!desc) { showToast('Descripción obligatoria', 'error'); return; }
+      const negocio = parseInt(document.getElementById('q10-act-negocio').value, 10);
+      const tipo = document.getElementById('q10-act-type').value.trim();
+      const estado = document.getElementById('q10-act-estado').value.trim();
+      if (!negocio || Number.isNaN(negocio)) { showToast('Consecutivo negocio obligatorio', 'error'); return; }
+      if (!tipo) { showToast('Tipo obligatorio', 'error'); return; }
+      if (!estado) { showToast('Estado obligatorio', 'error'); return; }
       const btn = document.getElementById('q10-act-submit');
       btn.disabled = true; btn.textContent = 'Registrando...';
       try {
-        await sendMsg('createActividad', { body: { Tipo: document.getElementById('q10-act-type').value, Descripcion: desc, Fecha: new Date().toISOString(), Codigo_oportunidad: contactData?.Codigo || null, Observaciones: `Contacto: ${fullName(contactData)} | WhatsApp` } });
+        // Numero_identificacion_asesor and Fecha_actividad are auto-injected by service-worker.
+        await sendMsg('createActividad', { body: {
+          Consecutivo_negocio: negocio,
+          Tipo_actividad: tipo,
+          Estado_actividad: estado,
+          Descripcion: desc || `Interacción WhatsApp con ${fullName(contactData)}`,
+        }});
         showToast('Actividad registrada ✓', 'success');
         removeModal();
       } catch (err) {
