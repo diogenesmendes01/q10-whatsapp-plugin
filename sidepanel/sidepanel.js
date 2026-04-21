@@ -66,6 +66,18 @@
       .filter(Boolean).join(' ');
   }
 
+  // Escape API-sourced strings before interpolating into innerHTML templates.
+  // Q10 catálogos (administrativos, programas, etc.) trazem nomes configurados pelo
+  // cliente — sem escape, um nome com `<` / `"` quebra o DOM ou abre XSS.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function showToast(text, type = '') {
     const existing = document.querySelector('.q10-toast');
     if (existing) existing.remove();
@@ -828,7 +840,7 @@
           <div class="q10-form-group"><label class="q10-form-label">Segundo Nombre</label><input class="q10-form-input" id="wz-fname2" value="${pf.Segundo_nombre||''}" placeholder="Segundo nombre"></div>
           <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="wz-lname" value="${pf.Primer_apellido||''}" placeholder="Apellido"></div>
           <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${pf.Segundo_apellido||''}" placeholder="Segundo apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación</label><input class="q10-form-input" id="wz-docnum" value="${pf.Numero_identificacion||''}" placeholder="CPF / Cédula / Pasaporte"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación *</label><input class="q10-form-input" id="wz-docnum" value="${pf.Numero_identificacion||''}" placeholder="CPF / Cédula / Pasaporte"></div>
           <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${pf.Email||''}" placeholder="email@ejemplo.com"></div>
           <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${wizardState.phone||''}" placeholder="+502 4512-3489"></div>
         `;
@@ -838,13 +850,13 @@
         // BUG-02 fix: use real /tiposidentificacion, /sexos and /programas codes
         // (previously hardcoded values like "CC", "Masculino" did not match Q10 tenant config).
         const doctypeOpts = (catalogsCache?.tiposIdentificacion || [])
-          .map(t => `<option value="${t.Codigo}">${t.Nombre} (${t.Abreviatura || t.Codigo})</option>`)
+          .map(t => `<option value="${escHtml(t.Codigo)}">${escHtml(t.Nombre)} (${escHtml(t.Abreviatura || t.Codigo)})</option>`)
           .join('');
         const genderOpts = (catalogsCache?.sexos || [])
-          .map(s => `<option value="${s.Codigo_sexo}">${s.Nombre_sexo}</option>`)
+          .map(s => `<option value="${escHtml(s.Codigo_sexo)}">${escHtml(s.Nombre_sexo)}</option>`)
           .join('');
         const progOptsCase1 = (catalogsCache?.programas || [])
-          .map(p => `<option value="${p.Codigo}">${p.Nombre || p.Codigo}</option>`)
+          .map(p => `<option value="${escHtml(p.Codigo)}">${escHtml(p.Nombre || p.Codigo)}</option>`)
           .join('');
         formHtml = `
           <div class="q10-wizard-step-header">
@@ -884,13 +896,13 @@
           // Pre-selects programa that was chosen in Case 1.
           const preselectedProg = res.estudiante?.Codigo_programa_inicial;
           const programasOpts = (catalogsCache?.programas || [])
-            .map(p => `<option value="${p.Codigo}" ${p.Codigo === preselectedProg ? 'selected' : ''}>${p.Nombre || p.Codigo}</option>`)
+            .map(p => `<option value="${escHtml(p.Codigo)}" ${p.Codigo === preselectedProg ? 'selected' : ''}>${escHtml(p.Nombre || p.Codigo)}</option>`)
             .join('');
           const periodosOpts = (catalogsCache?.periodos || [])
-            .map(p => `<option value="${p.Consecutivo}">${p.Nombre || p.Consecutivo}</option>`)
+            .map(p => `<option value="${escHtml(p.Consecutivo)}">${escHtml(p.Nombre || p.Consecutivo)}</option>`)
             .join('');
           const jornadaOpts = (catalogsCache?.jornadas || [])
-            .map(j => `<option value="${j.Codigo}">${j.Nombre}</option>`)
+            .map(j => `<option value="${escHtml(j.Codigo)}">${escHtml(j.Nombre)}</option>`)
             .join('');
           formHtml = `
             <div class="q10-wizard-step-header">
@@ -926,13 +938,13 @@
           const progName = catalogsCache?.programas?.find(p => p.Codigo === res.inscripcion?.Codigo_programa)?.Nombre || res.inscripcion?.Codigo_programa || '—';
           const perName = catalogsCache?.periodos?.find(p => p.Consecutivo === res.inscripcion?.Consecutivo_periodo)?.Nombre || res.inscripcion?.Consecutivo_periodo || '—';
           const nivelOpts = (catalogsCache?.niveles || [])
-            .map(n => `<option value="${n.Codigo_nivel}">${n.Nombre_nivel}</option>`)
+            .map(n => `<option value="${escHtml(n.Codigo_nivel)}">${escHtml(n.Nombre_nivel)}</option>`)
             .join('');
           const sedejornadaOpts = (catalogsCache?.sedesjornadas || [])
-            .map(sj => `<option value="${sj.Consecutivo}">${sj.Sede_jornada || (sj.Nombre_sede + ' - ' + sj.Nombre_jornada)}</option>`)
+            .map(sj => `<option value="${escHtml(sj.Consecutivo)}">${escHtml(sj.Sede_jornada || ((sj.Nombre_sede || '') + ' - ' + (sj.Nombre_jornada || '')))}</option>`)
             .join('');
           const condicionOpts = (catalogsCache?.condicionesMatricula || [])
-            .map(c => `<option value="${c.Codigo}">${c.Nombre}</option>`)
+            .map(c => `<option value="${escHtml(c.Codigo)}">${escHtml(c.Nombre)}</option>`)
             .join('');
           const todayIso = new Date().toISOString().split('T')[0];
           formHtml = `
@@ -1052,11 +1064,17 @@
           const wzDocnum = document.getElementById('wz-docnum').value.trim();
           if (!fname || !lname) throw new Error('Nombre y apellido son obligatorios.');
           const wzEmail = document.getElementById('wz-email').value.trim();
-          const wzCelular = document.getElementById('wz-phone').value.trim();
-          if (!wzEmail && !wzCelular) throw new Error('Informe email ou celular (ao menos um).');
+          const wzCelularRaw = document.getElementById('wz-phone').value.trim();
+          if (!wzEmail && !wzCelularRaw) throw new Error('Informe email ou celular (ao menos um).');
+          // Fail fast: Número de Identificación is required later (Case 1 POST /estudiantes).
+          // Don't create a contact in Q10 the user cannot use later.
+          if (!wzDocnum) throw new Error('Número de Identificación es obligatorio para avanzar al registro de estudiante.');
+          // Q10 Detalle[] only accepts Tipo_detalle="Celular" or "Email"; Celular is capped at 12 digits.
+          // Mirror the logic from the standalone contacto modal (line ~1463).
+          const wzCelularQ10 = wzCelularRaw.replace(/\D/g, '').slice(-12);
           const wzDetalle = [];
           if (wzEmail) wzDetalle.push({ Tipo_detalle: 'Email', Descripcion: wzEmail });
-          if (wzCelular) wzDetalle.push({ Tipo_detalle: 'Telefono', Descripcion: wzCelular });
+          if (wzCelularQ10) wzDetalle.push({ Tipo_detalle: 'Celular', Descripcion: wzCelularQ10 });
           const payload = {
             Consecutivo_oportunidad: 0,
             Nombres: [fname, fname2].filter(Boolean).join(' '),
@@ -1074,7 +1092,7 @@
             Primer_apellido: lname,
             Segundo_apellido: lname2 || null,
             Email: wzEmail,
-            Celular: wzCelular,
+            Celular: wzCelularQ10,
             Numero_identificacion: wzDocnum,
           };
           showToast('Contacto creado ✓', 'success');
@@ -1351,12 +1369,12 @@
 
       pubSel.innerHTML = '<option value="">— Como conheceu? —</option>' +
         (data.mediospublicitarios || []).map(m =>
-          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+          `<option value="${escHtml(m.Consecutivo)}">${escHtml(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
         ).join('');
 
       ctcSel.innerHTML = '<option value="">— Canal —</option>' +
         (data.medioscontacto || []).map(m =>
-          `<option value="${m.Consecutivo}">${m.Nombre || m.Descripcion || m.Consecutivo}</option>`
+          `<option value="${escHtml(m.Consecutivo)}">${escHtml(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
         ).join('');
 
       // Auto-select WhatsApp if found

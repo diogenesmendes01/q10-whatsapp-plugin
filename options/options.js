@@ -58,6 +58,15 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(' ');
   }
 
+  // Escape API-sourced strings before interpolating into innerHTML templates.
+  // Nomes de administrativos/emails no Q10 são texto livre — sem escape,
+  // caracteres como < " ' podem quebrar o DOM ou abrir XSS.
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
   function populateAsesores(list, selectedId) {
     if (!Array.isArray(list) || list.length === 0) {
       asesorSelect.innerHTML = '<option value="">— Nenhum administrativo encontrado —</option>';
@@ -70,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
       sorted.map(a => {
         const name = fullAsesorName(a) || `Asesor ${a.Numero_identificacion}`;
         const sel = a.Numero_identificacion === selectedId ? 'selected' : '';
-        return `<option value="${a.Numero_identificacion}" data-name="${name}" ${sel}>${name} (${a.Numero_identificacion})</option>`;
+        return `<option value="${escHtml(a.Numero_identificacion)}" data-name="${escHtml(name)}" ${sel}>${escHtml(name)} (${escHtml(a.Numero_identificacion)})</option>`;
       })
     );
     asesorSelect.innerHTML = opts.join('');
@@ -97,7 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({ action: 'fetchAdministrativos' }, (resp) => {
         if (!resp || !resp.ok) {
           const msg = (resp && resp.error) || 'Erro desconhecido';
-          asesorSelect.innerHTML = `<option value="">— Erro: ${msg} —</option>`;
+          asesorSelect.innerHTML = `<option value="">— Erro: ${escHtml(msg)} —</option>`;
           asesorSelect.disabled = true;
           btnSaveAsesor.disabled = true;
           return;
@@ -177,14 +186,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Clear
   btnClear.addEventListener('click', () => {
-    if (!confirm('Tem certeza que deseja remover a API key?')) return;
+    if (!confirm('Tem certeza que deseja remover a API key? O asesor configurado também será limpo.')) return;
 
-    chrome.storage.sync.remove(['q10ApiKey'], () => {
+    // Remove q10AsesorId junto: se trocar de tenant/chave, um asesor salvo de outro
+    // tenant seria injetado em oportunidades/atividades pelo service worker.
+    chrome.storage.sync.remove(['q10ApiKey', 'q10AsesorId'], () => {
       input.value = '';
+      savedAsesorId = null;
       updateStatus(false);
-      // Reset asesor dropdown since it depends on the key
+      updateAsesorStatus(false);
       loadAsesoresList();
-      showAlert('success', 'API key removida');
+      showAlert('success', 'API key e asesor removidos');
     });
   });
 
