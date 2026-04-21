@@ -1,7 +1,11 @@
 /* ============================================================
    Q10 CRM — Store Loader (WhatsApp Web)
-   Finds and exposes WhatsApp Web's internal Store object
-   using multiple strategies with retry/fallback.
+   Resolves the WhatsApp Store via Q10StoreAdapter abstraction.
+
+   This loader:
+   1. Loads store-adapter.js into the page context
+   2. Calls Q10StoreAdapter.resolveStore() (auto-runs on adapter load)
+   3. Handles the Q10_ADAPTER_READY / Q10_ADAPTER_UNAVAILABLE events
 
    Runs in PAGE context (injected via <script> tag).
    ============================================================ */
@@ -9,280 +13,109 @@
 (function () {
   'use strict';
 
-  const TAG = '[Q10 Inject]';
-  const MAX_RETRIES = 50;        // ~25 seconds total
-  const RETRY_INTERVAL = 500;    // ms between retries
+  var TAG = '[Q10 Loader]';
+  var ADAPTER_INIT_TIMEOUT = 30000; // ms
 
   // Avoid double-init
-  if (window.__q10StoreLoaded) {
-    console.log(TAG, 'Store loader already running, skipping.');
+  if (window.__q10LoaderRunning) {
+    console.log(TAG, 'Loader already running, skipping.');
     return;
   }
-  window.__q10StoreLoaded = true;
+  window.__q10LoaderRunning = true;
 
-  /**
-   * The Store object we're looking for has these key collections:
-   * - Chat: active chats
-   * - Contact: contacts
-   * - Msg: messages
-   * - Conn: connection info
-   */
-  const STORE_MODULES = {
-    Chat:    (m) => m.Chat && m.Chat.get && m.Chat.getModelsArray,
-    Contact: (m) => m.Contact && m.Contact.get && m.Contact.getModelsArray,
-    Msg:     (m) => m.Msg && m.Msg.get,
-    Conn:    (m) => m.Conn && m.Conn.wid,
-    Cmd:     (m) => m.Cmd && m.Cmd.openChatBottom,
-  };
-
-  // Will hold the resolved Store
-  window.Q10Store = null;
-
-  // ================================================================
-  //  Strategy 1: Intercept webpackChunkwhatsapp_web_client push
-  // ================================================================
-  function strategyWebpackIntercept() {
-    return new Promise((resolve) => {
-      const chunk = window.webpackChunkwhatsapp_web_client;
-      if (!chunk) {
-        resolve(null);
+  // ──────────────────────────────────────────────────────────────
+  //  Load store-adapter.js (sets window.Q10StoreAdapter + auto-bootstraps)
+  // ──────────────────────────────────────────────────────────────
+  function loadAdapter() {
+    return new Promise(function(resolve) {
+      if (window.Q10StoreAdapter) {
+        resolve();
         return;
       }
 
-      console.log(TAG, 'Strategy 1: Intercepting webpack chunk push...');
-
-      let resolved = false;
-      const originalPush = chunk.push.bind(chunk);
-
-      chunk.push = function (args) {
-        const result = originalPush(args);
-
-        if (!resolved) {
-          // After a chunk is loaded, try to find store modules
-          const store = searchModulesInWebpack();
-          if (store) {
-            resolved = true;
-            chunk.push = originalPush; // restore
-            resolve(store);
-          }
-        }
-
-        return result;
+      var script = document.createElement('script');
+      script.src = chrome.runtime.getURL('inject/store-adapter.js');
+      script.type = 'text/javascript';
+      script.onload = function() {
+        console.log(TAG, 'store-adapter.js loaded');
+        resolve();
       };
-
-      // Also try immediately in case modules are already loaded
-      const immediate = searchModulesInWebpack();
-      if (immediate) {
-        resolved = true;
-        chunk.push = originalPush;
-        resolve(immediate);
-      }
-
-      // Timeout — don't hang forever on this strategy
-      setTimeout(() => {
-        if (!resolved) {
-          chunk.push = originalPush;
-          resolve(null);
-        }
-      }, 10000);
+      script.onerror = function() {
+        console.error(TAG, 'Failed to load store-adapter.js');
+        resolve();
+      };
+      (document.head || document.documentElement).appendChild(script);
     });
   }
 
-  // ================================================================
-  //  Strategy 2: Search through webpack require/modules
-  // ================================================================
-  function searchModulesInWebpack() {
-    try {
-      const chunk = window.webpackChunkwhatsapp_web_client;
-      if (!chunk || chunk.length === 0) return null;
+  // ──────────────────────────────────────────────────────────────
+  //  Wait for adapter to signal readiness / unavailability
+  // ──────────────────────────────────────────────────────────────
+  function waitForAdapterSignal() {
+    return new Promise(function(resolve) {
+      // Check if already resolved
+      if (window.Q10StoreAdapter && window.Q10StoreAdapter.isAvailable()) {
+        resolve(true);
+        return;
+      }
+      if (window.Q10StoreAdapter && window.Q10StoreAdapter.isBroken()) {
+        resolve(false);
+        return;
+      }
 
-      let modules = null;
-
-      // Inject a fake module to get access to the require function
-      const moduleId = '__q10_probe_' + Date.now();
-      chunk.push([
-        [moduleId],
-        {},
-        function (require) {
-          modules = require;
-        },
-      ]);
-
-      if (!modules || !modules.m) return null;
-
-      const store = {};
-      const moduleKeys = Object.keys(modules.m);
-
-      for (const key of moduleKeys) {
-        try {
-          const mod = modules(key);
-          if (!mod || typeof mod !== 'object') continue;
-
-          // Check each target module
-          for (const [name, test] of Object.entries(STORE_MODULES)) {
-            if (!store[name]) {
-              try {
-                if (test(mod)) {
-                  store[name] = mod[name];
-                }
-              } catch (_) { /* skip */ }
-            }
-          }
-
-          // Also check mod.default
-          if (mod.default && typeof mod.default === 'object') {
-            for (const [name, test] of Object.entries(STORE_MODULES)) {
-              if (!store[name]) {
-                try {
-                  if (test(mod.default)) {
-                    store[name] = mod.default[name];
-                  }
-                } catch (_) { /* skip */ }
-              }
-            }
-          }
-        } catch (_) {
-          // Some modules throw on access — skip
+      var handler = function(event) {
+        if (event.source !== window) return;
+        var type = event.data && event.data.type;
+        if (type === 'Q10_ADAPTER_READY') {
+          window.removeEventListener('message', handler);
+          window.removeEventListener('message', fallbackHandler);
+          clearTimeout(timeoutId);
+          resolve(true);
         }
-      }
-
-      // Need at minimum Chat to be useful
-      if (store.Chat) {
-        console.log(TAG, 'Found Store modules:', Object.keys(store).join(', '));
-        return store;
-      }
-
-      return null;
-    } catch (err) {
-      console.warn(TAG, 'searchModulesInWebpack error:', err.message);
-      return null;
-    }
-  }
-
-  // ================================================================
-  //  Strategy 3: Look for window.Store (some WA versions expose it)
-  // ================================================================
-  function strategyWindowStore() {
-    if (window.Store && window.Store.Chat) {
-      console.log(TAG, 'Strategy 3: Found window.Store directly');
-      return window.Store;
-    }
-    return null;
-  }
-
-  // ================================================================
-  //  Strategy 4: Search window properties for Store-like objects
-  // ================================================================
-  function strategyWindowSearch() {
-    try {
-      const candidates = Object.keys(window).filter((key) => {
-        try {
-          const val = window[key];
-          return (
-            val &&
-            typeof val === 'object' &&
-            val.Chat &&
-            typeof val.Chat.get === 'function'
-          );
-        } catch (_) {
-          return false;
+        if (type === 'Q10_ADAPTER_UNAVAILABLE' || type === 'Q10_STORE_FALLBACK') {
+          window.removeEventListener('message', handler);
+          window.removeEventListener('message', fallbackHandler);
+          clearTimeout(timeoutId);
+          resolve(false);
         }
-      });
+      };
 
-      if (candidates.length > 0) {
-        console.log(TAG, 'Strategy 4: Found Store-like object at window.' + candidates[0]);
-        return window[candidates[0]];
-      }
-    } catch (err) {
-      console.warn(TAG, 'strategyWindowSearch error:', err.message);
-    }
-    return null;
-  }
-
-  // ================================================================
-  //  Strategy 5: Use require('WAWebCollections') if available
-  // ================================================================
-  function strategyRequire() {
-    try {
-      if (typeof window.require === 'function') {
-        const collections = window.require('WAWebCollections');
-        if (collections && collections.ChatCollection) {
-          console.log(TAG, 'Strategy 5: Found via WAWebCollections require');
-          return {
-            Chat: collections.ChatCollection,
-            Contact: collections.ContactCollection || null,
-            Msg: collections.MsgCollection || null,
-          };
+      var fallbackHandler = function(event) {
+        if (event.source !== window) return;
+        if (event.data && event.data.type === 'Q10_STORE_FALLBACK') {
+          window.removeEventListener('message', handler);
+          window.removeEventListener('message', fallbackHandler);
+          clearTimeout(timeoutId);
+          resolve(false);
         }
-      }
-    } catch (_) { /* not available */ }
-    return null;
+      };
+
+      window.addEventListener('message', handler);
+      window.addEventListener('message', fallbackHandler);
+
+      var timeoutId = setTimeout(function() {
+        window.removeEventListener('message', handler);
+        window.removeEventListener('message', fallbackHandler);
+        resolve(false);
+      }, ADAPTER_INIT_TIMEOUT);
+    });
   }
 
-  // ================================================================
-  //  Master loader — tries all strategies with polling
-  // ================================================================
-  async function loadStore() {
-    let attempt = 0;
-
-    while (attempt < MAX_RETRIES) {
-      attempt++;
-
-      // Quick strategies first
-      let store = strategyWindowStore();
-      if (store) return store;
-
-      store = strategyRequire();
-      if (store) return store;
-
-      store = strategyWindowSearch();
-      if (store) return store;
-
-      // Webpack search (heavier)
-      store = searchModulesInWebpack();
-      if (store) return store;
-
-      if (attempt === 1) {
-        console.log(TAG, 'Store not available yet, polling...');
-        // Try webpack intercept in parallel (only once)
-        strategyWebpackIntercept().then((s) => {
-          if (s && !window.Q10Store) {
-            window.Q10Store = s;
-            announceStoreReady(s);
-          }
-        });
-      }
-
-      await sleep(RETRY_INTERVAL);
-    }
-
-    return null;
-  }
-
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-
-  function announceStoreReady(store) {
-    console.log(TAG, '✅ Store loaded! Available collections:', Object.keys(store).join(', '));
-    window.postMessage({ type: 'Q10_STORE_READY', collections: Object.keys(store) }, '*');
-  }
-
-  // ================================================================
+  // ──────────────────────────────────────────────────────────────
   //  Init
-  // ================================================================
-  (async function init() {
+  // ──────────────────────────────────────────────────────────────
+  async function init() {
     console.log(TAG, 'Store loader starting...');
 
-    const store = await loadStore();
+    await loadAdapter();
+    var available = await waitForAdapterSignal();
 
-    if (store) {
-      window.Q10Store = store;
-      announceStoreReady(store);
+    if (available) {
+      console.log(TAG, 'Q10StoreAdapter ready.');
     } else {
-      console.warn(TAG, '⚠️ Could not find WhatsApp Store after', MAX_RETRIES, 'attempts.');
-      console.warn(TAG, 'Falling back to DOM-based detection.');
-      window.postMessage({ type: 'Q10_STORE_FALLBACK' }, '*');
+      console.warn(TAG, 'Q10StoreAdapter unavailable — DOM fallback will be used.');
     }
-  })();
+  }
+
+  init();
 })();
