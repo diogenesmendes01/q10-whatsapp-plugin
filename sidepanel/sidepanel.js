@@ -78,10 +78,23 @@
       .replace(/'/g, '&#39;');
   }
 
+  function htmlText(value, fallback = '&mdash;') {
+    return value === undefined || value === null || value === '' ? fallback : escHtml(value);
+  }
+
+  function htmlAttr(value) {
+    return escHtml(value === undefined || value === null ? '' : value);
+  }
+
+  function fullNameHtml(d) {
+    return htmlText(fullName(d));
+  }
+
   function showToast(text, type = '') {
     const existing = document.querySelector('.q10-toast');
     if (existing) existing.remove();
-    const t = el('div', `q10-toast ${type ? 'q10-toast-' + type : ''}`, text);
+    const t = el('div', `q10-toast ${type ? 'q10-toast-' + type : ''}`);
+    t.textContent = text || '';
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3500);
   }
@@ -227,18 +240,19 @@
   }
 
   function renderTagsSection(contactId, existingTags) {
+    const contactAttr = htmlAttr(contactId);
     return `
       <div class="q10-tags-section">
         <div class="q10-tags-header">
           <span class="q10-tags-title">${icon('clipboard')} Etiquetas</span>
         </div>
-        <div class="q10-tags-list" id="q10-tags-${contactId}">
+        <div class="q10-tags-list" id="q10-tags-${contactAttr}">
           ${AVAILABLE_TAGS.map(t => {
             const active = existingTags.includes(t.id);
             return `<button class="q10-tag ${active ? 'q10-tag-active' : ''}" 
-              data-tag="${t.id}" data-contact="${contactId}"
+              data-tag="${htmlAttr(t.id)}" data-contact="${contactAttr}"
               style="--tag-color: ${t.color}; --tag-bg: ${t.bg}">
-              ${t.label}
+              ${htmlText(t.label)}
             </button>`;
           }).join('')}
         </div>
@@ -281,6 +295,7 @@
 
   async function renderNotesSection(contactId) {
     const notes = await getContactNotes(contactId);
+    const contactAttr = htmlAttr(contactId);
     return `
       <div class="q10-notes-section">
         <div class="q10-notes-header">
@@ -295,10 +310,10 @@
         </div>
         <div class="q10-notes-list" id="q10-notes-list">
           ${notes.map(n => `
-            <div class="q10-note-card" data-note-id="${n.id}">
-              <div class="q10-note-date">${n.date}</div>
+            <div class="q10-note-card" data-note-id="${htmlAttr(n.id)}">
+              <div class="q10-note-date">${htmlText(n.date, '')}</div>
               <div class="q10-note-text">${escapeHtml(n.text)}</div>
-              <button class="q10-note-delete" data-note-id="${n.id}" data-contact="${contactId}">✕</button>
+              <button class="q10-note-delete" data-note-id="${htmlAttr(n.id)}" data-contact="${contactAttr}">✕</button>
             </div>
           `).join('')}
           ${notes.length === 0 ? '<p class="q10-notes-empty">Sin notas aún</p>' : ''}
@@ -389,7 +404,7 @@
     body().innerHTML = `
       <div class="q10-state">
         <div class="q10-spinner"></div>
-        <div class="q10-state-title">${msg || 'Buscando no Q10...'}</div>
+        <div class="q10-state-title">${htmlText(msg, 'Buscando no Q10...')}</div>
         <div class="q10-state-text">Procurando dados do contato</div>
       </div>`;
     hideActions();
@@ -452,7 +467,7 @@
       <div class="q10-state">
         <span class="q10-state-icon" style="color:#EF4444">${ICONS.alertCircle}</span>
         <div class="q10-state-title">Erro</div>
-        <div class="q10-state-text">${msg}</div>
+        <div class="q10-state-text">${htmlText(msg, 'Erro desconhecido.')}</div>
         <button class="q10-btn q10-btn-outline" id="q10-retry">Tentar novamente</button>
       </div>`;
     hideActions();
@@ -489,7 +504,7 @@
   function phoneHtml(phone) {
     return `<div class="q10-phone-display">
       <span class="q10-phone-icon">${ICONS.phone}</span>
-      <span class="q10-phone-number">${formatPhone(phone)}</span>
+      <span class="q10-phone-number">${htmlText(formatPhone(phone), '')}</span>
     </div>`;
   }
 
@@ -504,7 +519,7 @@
 
     const displayHtml = isPhone 
       ? phoneHtml(detectedPhone)
-      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${detectedName}</span></div>`;
+      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${htmlText(detectedName, '')}</span></div>`;
 
     body().innerHTML = `
       ${displayHtml}
@@ -528,7 +543,7 @@
   // ================================================================
   function renderEstudiante(result) {
     const d = result.data;
-    const name = fullName(d);
+    const name = fullNameHtml(d);
     const phone = d.Celular || d.Telefono || currentPhone;
 
     let financialHtml = '';
@@ -558,7 +573,7 @@
           <div class="q10-section-title">${icon('alertCircle','q10-section-icon')} Pagos Pendientes (${result.pagosPendientes.length})</div>
           ${result.pagosPendientes.map(p => `
             <div class="q10-info-card" style="border-left:3px solid #EF4444;">
-              <div class="q10-info-row"><span class="q10-info-label">Concepto</span><span class="q10-info-value">${p.Concepto || p.Descripcion || p.Nombre || '—'}</span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Concepto</span><span class="q10-info-value">${htmlText(p.Concepto || p.Descripcion || p.Nombre)}</span></div>
               <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value"><span class="q10-badge q10-badge-red">${fmtMoney(p.Valor || p.Monto || p.Saldo)}</span></span></div>
               ${p.Fecha_vencimiento ? `<div class="q10-info-row"><span class="q10-info-label">Vencimiento</span><span class="q10-info-value">${new Date(p.Fecha_vencimiento).toLocaleDateString('es')}</span></div>` : ''}
             </div>
@@ -578,23 +593,23 @@
       ${phoneHtml(phone)}
       <span class="q10-contact-type q10-type-estudiante">${icon('graduation','q10-section-icon')} Estudiante</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${d.Codigo || '—'} · ${d.Numero_identificacion || ''}</div>
+      <div class="q10-contact-id">ID: ${htmlText(d.Codigo)} &middot; ${htmlText(d.Numero_identificacion, '')}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información Personal</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${d.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${d.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${d.Celular||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(d.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(d.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(d.Celular)}</span></div>
         </div>
       </div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('book','q10-section-icon')} Académico</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${d.Programa||d.Nombre_programa||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(d.Programa || d.Nombre_programa)}</span></div>
           <div class="q10-info-row"><span class="q10-info-label">Estado Matrícula</span>
-            <span class="q10-info-value"><span class="q10-badge ${d.Estado_matricula==='Activo'?'q10-badge-green':'q10-badge-gray'}">${d.Estado_matricula||'—'}</span></span>
+            <span class="q10-info-value"><span class="q10-badge ${d.Estado_matricula==='Activo'?'q10-badge-green':'q10-badge-gray'}">${htmlText(d.Estado_matricula)}</span></span>
           </div>
-          <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${d.Periodo||d.Nombre_periodo||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${htmlText(d.Periodo || d.Nombre_periodo)}</span></div>
         </div>
       </div>
       ${financialHtml}
@@ -643,7 +658,7 @@
   // ================================================================
   function renderOportunidad(result) {
     const d = result.data;
-    const name = fullName(d);
+    const name = fullNameHtml(d);
 
     let negociosHtml = '';
     if (result.negocios && result.negocios.length > 0) {
@@ -652,9 +667,9 @@
           <div class="q10-section-title">${icon('briefcase','q10-section-icon')} Negocios</div>
           ${result.negocios.map(n => `
             <div class="q10-info-card">
-              <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${n.Nombre||n.Descripcion||'—'}</span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${htmlText(n.Nombre || n.Descripcion)}</span></div>
               <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${fmtMoney(n.Valor)}</span></div>
-              <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${n.Estado||'—'}</span></span></div>
+              <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${htmlText(n.Estado)}</span></span></div>
             </div>`).join('')}
         </div>`;
     }
@@ -666,8 +681,8 @@
           <div class="q10-section-title">${icon('activity','q10-section-icon')} Actividades Recientes</div>
           ${result.actividades.map(a => `
             <div class="q10-activity-item">
-              <div class="q10-activity-type">${a.Tipo||'Actividad'}</div>
-              <div class="q10-activity-desc">${a.Descripcion||a.Observaciones||'—'}</div>
+              <div class="q10-activity-type">${htmlText(a.Tipo, 'Actividad')}</div>
+              <div class="q10-activity-desc">${htmlText(a.Descripcion || a.Observaciones)}</div>
               <div class="q10-activity-date">${a.Fecha?new Date(a.Fecha).toLocaleDateString('es'):''}</div>
             </div>`).join('')}
         </div>`;
@@ -677,14 +692,14 @@
       ${phoneHtml(d.Celular||d.Telefono||currentPhone)}
       <span class="q10-contact-type q10-type-oportunidad">${icon('briefcase','q10-section-icon')} Lead / Oportunidad</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${d.Codigo||'—'}</div>
+      <div class="q10-contact-id">ID: ${htmlText(d.Codigo)}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${d.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${d.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${d.Celular||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${d.Estado||d.Etapa||'—'}</span></span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(d.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(d.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(d.Celular)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${htmlText(d.Estado || d.Etapa)}</span></span></div>
         </div>
       </div>
       ${negociosHtml}
@@ -716,18 +731,18 @@
   //  RENDER: CONTACTO
   // ================================================================
   function renderContacto(data) {
-    const name = fullName(data);
+    const name = fullNameHtml(data);
     body().innerHTML = `
       ${phoneHtml(data.Celular||data.Telefono||currentPhone)}
       <span class="q10-contact-type q10-type-contacto">${icon('user','q10-section-icon')} Contacto</span>
       <div class="q10-contact-name">${name}</div>
-      <div class="q10-contact-id">ID: ${data.Codigo||'—'} · ${data.Numero_identificacion||''}</div>
+      <div class="q10-contact-id">ID: ${htmlText(data.Codigo)} &middot; ${htmlText(data.Numero_identificacion, '')}</div>
       <div class="q10-section">
         <div class="q10-section-title">${icon('user','q10-section-icon')} Información</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${data.Email||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${data.Telefono||'—'}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${data.Celular||'—'}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(data.Email)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(data.Telefono)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(data.Celular)}</span></div>
         </div>
       </div>
       <div id="q10-tags-notes-container"></div>`;
@@ -836,13 +851,13 @@
               <div class="q10-wizard-step-desc">Registre los datos básicos del nuevo contacto</div>
             </div>
           </div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="wz-fname" value="${pf.Primer_nombre||''}" placeholder="Nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Segundo Nombre</label><input class="q10-form-input" id="wz-fname2" value="${pf.Segundo_nombre||''}" placeholder="Segundo nombre"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="wz-lname" value="${pf.Primer_apellido||''}" placeholder="Apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${pf.Segundo_apellido||''}" placeholder="Segundo apellido"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación *</label><input class="q10-form-input" id="wz-docnum" value="${pf.Numero_identificacion||''}" placeholder="CPF / Cédula / Pasaporte"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${pf.Email||''}" placeholder="email@ejemplo.com"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${wizardState.phone||''}" placeholder="+502 4512-3489"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="wz-fname" value="${htmlAttr(pf.Primer_nombre)}" placeholder="Nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Segundo Nombre</label><input class="q10-form-input" id="wz-fname2" value="${htmlAttr(pf.Segundo_nombre)}" placeholder="Segundo nombre"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Primer Apellido *</label><input class="q10-form-input" id="wz-lname" value="${htmlAttr(pf.Primer_apellido)}" placeholder="Apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Segundo Apellido</label><input class="q10-form-input" id="wz-lname2" value="${htmlAttr(pf.Segundo_apellido)}" placeholder="Segundo apellido"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Número de Identificación *</label><input class="q10-form-input" id="wz-docnum" value="${htmlAttr(pf.Numero_identificacion)}" placeholder="CPF / Cédula / Pasaporte"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="wz-email" type="email" value="${htmlAttr(pf.Email)}" placeholder="email@ejemplo.com"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="wz-phone" value="${htmlAttr(wizardState.phone)}" placeholder="+502 4512-3489"></div>
         `;
         break;
 
@@ -867,7 +882,7 @@
             </div>
           </div>
           <div class="q10-info-card" style="margin-bottom:16px;background:#F0FDF4;border-color:#BBF7D0;">
-            <div style="font-size:12px;color:#065F46;">✅ Contacto creado: <strong>${fullName(res.contacto)}</strong></div>
+            <div style="font-size:12px;color:#065F46;">✅ Contacto creado: <strong>${fullNameHtml(res.contacto)}</strong></div>
           </div>
           <div class="q10-form-group"><label class="q10-form-label">Tipo de Identificación *</label>
             <select class="q10-form-select" id="wz-doctype">
@@ -913,7 +928,7 @@
               </div>
             </div>
             <div class="q10-info-card" style="margin-bottom:16px;background:#F0FDF4;border-color:#BBF7D0;">
-              <div style="font-size:12px;color:#065F46;">✅ Estudiante registrado: <strong>${fullName(res.contacto)}</strong></div>
+              <div style="font-size:12px;color:#065F46;">✅ Estudiante registrado: <strong>${fullNameHtml(res.contacto)}</strong></div>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Programa *</label>
               <select class="q10-form-select" id="wz-programa"><option value="">— Seleccionar programa —</option>${programasOpts || '<option value="" disabled>No hay programas</option>'}</select>
@@ -961,9 +976,9 @@
             <div class="q10-section">
               <div class="q10-section-title">Resumen</div>
               <div class="q10-info-card">
-                <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullName(res.contacto)}</span></div>
-                <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${progName}</span></div>
-                <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${perName}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullNameHtml(res.contacto)}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(progName)}</span></div>
+                <div class="q10-info-row"><span class="q10-info-label">Periodo</span><span class="q10-info-value">${htmlText(perName)}</span></div>
               </div>
             </div>
             <div class="q10-form-group"><label class="q10-form-label">Nivel *</label>
@@ -1236,9 +1251,9 @@
       <div class="q10-section">
         <div class="q10-section-title">Resumen</div>
         <div class="q10-info-card">
-          <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullName(res.contacto)}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${progName}</span></div>
-          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-green">${res.matricula?.Estado||'Activo'}</span></span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Alumno</span><span class="q10-info-value">${fullNameHtml(res.contacto)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(progName)}</span></div>
+          <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-green">${htmlText(res.matricula?.Estado, 'Activo')}</span></span></div>
           ${res.cobro ? `<div class="q10-info-row"><span class="q10-info-label">Cobro</span><span class="q10-info-value">${fmtMoney(res.cobro.Valor)}</span></div>` : ''}
         </div>
       </div>
@@ -1280,7 +1295,7 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-info-card" style="margin-bottom:14px;background:#F0F9FF;border-color:#BAE6FD;">
-            <div style="font-size:12px;color:#0369A1;">Alumno: <strong>${fullName(studentData)}</strong></div>
+            <div style="font-size:12px;color:#0369A1;">Alumno: <strong>${fullNameHtml(studentData)}</strong></div>
           </div>
           <div class="q10-form-group"><label class="q10-form-label">Concepto *</label><input class="q10-form-input" id="q10-cobro-concepto" placeholder="Ej: Mensualidad, Material"></div>
           <div class="q10-form-group"><label class="q10-form-label">Valor *</label><input class="q10-form-input" id="q10-cobro-valor" type="number" min="0" step="0.01" placeholder="0.00"></div>
@@ -1334,11 +1349,11 @@
         <div class="q10-modal-body">
           <div class="q10-form-group">
             <label class="q10-form-label">Nome do Lead *</label>
-            <input class="q10-form-input" id="q10-op-nome" value="${prefillName}" placeholder="Ex: João Silva — Inglês Básico">
+            <input class="q10-form-input" id="q10-op-nome" value="${htmlAttr(prefillName)}" placeholder="Ex: João Silva — Inglês Básico">
           </div>
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${prefillPhone}" placeholder="19988145438"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${prefillEmail}" placeholder="email@ejemplo.com"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${htmlAttr(prefillPhone)}" placeholder="19988145438"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${htmlAttr(prefillEmail)}" placeholder="email@ejemplo.com"></div>
           </div>
           <div class="q10-form-row">
             <div class="q10-form-group">
@@ -1420,6 +1435,8 @@
     if (!detectedName) detectedName = currentContactName;
     removeModal();
     const overlay = el('div', 'q10-modal-overlay');
+    const detectedFirstNames = detectedName ? detectedName.split(' ').slice(0,2).join(' ') : '';
+    const detectedLastNames = detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : '';
     overlay.innerHTML = `
       <div class="q10-modal q10-modal-wide">
         <div class="q10-modal-header">
@@ -1428,11 +1445,11 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${detectedName ? detectedName.split(' ').slice(0,2).join(' ') : ''}" placeholder="Primer y segundo nombre"></div>
-            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${detectedName && detectedName.split(' ').length > 1 ? detectedName.split(' ').slice(1).join(' ') : ''}" placeholder="Apellidos"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Nombres *</label><input class="q10-form-input" id="q10-ct-fname" value="${htmlAttr(detectedFirstNames)}" placeholder="Primer y segundo nombre"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Apellidos *</label><input class="q10-form-input" id="q10-ct-lname" value="${htmlAttr(detectedLastNames)}" placeholder="Apellidos"></div>
           </div>
           <div class="q10-form-row">
-            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${phone||''}" placeholder="+55 11 99999-9999"></div>
+            <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-ct-phone" value="${htmlAttr(phone)}" placeholder="+55 11 99999-9999"></div>
             <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-ct-email" type="email" placeholder="email@ejemplo.com"></div>
           </div>
           <p style="font-size:11px;color:#6B7280;margin:0 0 4px">* Informe ao menos celular ou email</p>
@@ -1514,7 +1531,7 @@
     const overlay = el('div', 'q10-modal-overlay');
     const presetNegocio = contactData?.Consecutivo_negocio || contactData?.Negocio_favorito?.Consecutivo_negocio || '';
     const TIPOS_ACTIVIDAD = ['Llamada', 'WhatsApp', 'Correo', 'Nota', 'Reunión'];
-    const tipoOpts = TIPOS_ACTIVIDAD.map(t => `<option value="${t}" ${t === 'WhatsApp' ? 'selected' : ''}>${t}</option>`).join('');
+    const tipoOpts = TIPOS_ACTIVIDAD.map(t => `<option value="${htmlAttr(t)}" ${t === 'WhatsApp' ? 'selected' : ''}>${htmlText(t)}</option>`).join('');
     overlay.innerHTML = `
       <div class="q10-modal">
         <div class="q10-modal-header">
@@ -1523,7 +1540,7 @@
         </div>
         <div class="q10-modal-body">
           <div class="q10-form-group"><label class="q10-form-label">Consecutivo Negocio *</label>
-            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${presetNegocio}" placeholder="ID del negocio (ver oportunidad primero)">
+            <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${htmlAttr(presetNegocio)}" placeholder="ID del negocio (ver oportunidad primero)">
             <div style="font-size:11px;color:#6B7280;margin-top:4px;">Cree una oportunidad en el contacto antes de registrar actividades; el ID del Primer Negocio aparece en la respuesta.</div>
           </div>
           <div class="q10-form-group"><label class="q10-form-label">Estado *</label>

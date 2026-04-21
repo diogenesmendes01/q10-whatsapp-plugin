@@ -238,12 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
       } else if (resp.status === 401 || resp.status === 403) {
         testResult.innerHTML = '<span style="color:#991B1B">❌ <strong>API key inválida.</strong> Verifique a chave e tente novamente.</span>';
       } else {
-        testResult.innerHTML = `<span style="color:#92400E">⚠️ <strong>Resposta inesperada (${resp.status}).</strong> A API pode estar temporariamente indisponível.</span>`;
+        testResult.innerHTML = `<span style="color:#92400E">⚠️ <strong>Resposta inesperada (${escHtml(resp.status)}).</strong> A API pode estar temporariamente indisponível.</span>`;
       }
     })
     .catch(err => {
       testResult.style.display = 'block';
-      testResult.innerHTML = `<span style="color:#991B1B">❌ <strong>Erro de conexão:</strong> ${err.message}</span>`;
+      testResult.innerHTML = `<span style="color:#991B1B">❌ <strong>Erro de conexão:</strong> ${escHtml(err.message)}</span>`;
     })
     .finally(() => {
       btnTest.disabled = false;
