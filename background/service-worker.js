@@ -440,6 +440,70 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
 
+    // ── Batch leads: forward start/stop to content script ──────────────
+    case 'batchExtractStart':
+    case 'batchExtractStop':
+      (async () => {
+        try {
+          const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+          if (!tabs.length) {
+            sendResponse({ ok: false, error: 'WhatsApp Web não encontrado' });
+            return;
+          }
+          chrome.tabs.sendMessage(tabs[0].id, { action: msg.action, cutoffMs: msg.cutoffMs || null }, (resp) => {
+            sendResponse(resp || { ok: true });
+          });
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message });
+        }
+      })();
+      return true;
+
+    // ── Batch leads: relay progress/complete from content script to sidepanel ──
+    case 'batchExtractProgress':
+    case 'batchExtractComplete':
+      // Content script → service worker → sidepanel (broadcast)
+      // Store in session so sidepanel can read on connect
+      chrome.storage.session.set({
+        batchExtractStatus: {
+          action: msg.action,
+          count: msg.count || 0,
+          ok: msg.ok,
+          data: msg.data || null,
+          error: msg.error || null,
+          ts: Date.now()
+        }
+      });
+      sendResponse({ ok: true });
+      return false;
+
+    // ── Batch leads: import CSV contacts to Q10 ──────────────────────────
+    case 'batchImportContacts':
+      return handle((async () => {
+        const contacts = msg.contacts || [];
+        const results = [];
+        for (const c of contacts) {
+          try {
+            const nameParts = (c.name || '').trim().split(/\s+/);
+            const firstName = nameParts[0] || 'Contato';
+            const lastName = nameParts.slice(1).join(' ') || 'WhatsApp';
+            const phone = (c.phone || '').replace(/\D/g, '');
+            const body = {
+              Nombres: firstName,
+              Apellidos: lastName,
+              Detalle: [{ Tipo: 'Celular', Valor: phone }]
+            };
+            await apiPost('/contactos', body);
+            results.push({ phone, ok: true });
+          } catch (e) {
+            results.push({ phone: c.phone, ok: false, error: e.message });
+          }
+        }
+        const ok = results.filter(r => r.ok).length;
+        const fail = results.filter(r => !r.ok).length;
+        return { results, summary: { ok, fail } };
+      })());
+
     default:
       sendResponse({ ok: false, error: `Unknown action: ${msg.action}` });
       return false;
