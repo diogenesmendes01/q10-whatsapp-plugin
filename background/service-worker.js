@@ -116,8 +116,10 @@ function phoneMatches(contactPhone, searchPhone) {
   if (a === b) return true;
   // One contains the other (handles country code differences)
   if (a.endsWith(b) || b.endsWith(a)) return true;
-  // Last 8 digits match (handles varying country code + area code formats)
-  if (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8)) return true;
+  // Last 9 digits match (avoids false positives for Brazilian numbers where
+  // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
+  // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
+  // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
   return false;
 }
 
@@ -383,11 +385,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'exportAll':
       return handle((async () => {
-        const [contactos, usuarios] = await Promise.all([
+        const [contactos, usuarios, oportunidades] = await Promise.all([
           apiGet('/contactos').catch(() => []),
-          apiGet('/usuarios').catch(() => [])
+          apiGet('/usuarios').catch(() => []),
+          apiGet('/oportunidades').catch(() => [])
         ]);
-        return { contactos, estudiantes: usuarios };
+        return { contactos, estudiantes: usuarios, oportunidades };
       })());
 
     case 'exportConversation':
