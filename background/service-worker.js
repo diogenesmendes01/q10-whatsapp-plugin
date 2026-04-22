@@ -134,11 +134,7 @@ function phoneMatches(contactPhone, searchPhone) {
   // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
   // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
   // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
-<<<<<<< HEAD
   if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
-=======
->>>>>>> origin/master
-  return false;
 }
 
 // ---------- Name matching ----------
