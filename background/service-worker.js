@@ -383,11 +383,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'exportAll':
       return handle((async () => {
-        const [contactos, usuarios] = await Promise.all([
+        const [contactos, usuarios, oportunidades] = await Promise.all([
           apiGet('/contactos').catch(() => []),
-          apiGet('/usuarios').catch(() => [])
+          apiGet('/usuarios').catch(() => []),
+          apiGet('/oportunidades').catch(() => [])
         ]);
-        return { contactos, estudiantes: usuarios };
+        return { contactos, estudiantes: usuarios, oportunidades };
       })());
 
     case 'exportConversation':
