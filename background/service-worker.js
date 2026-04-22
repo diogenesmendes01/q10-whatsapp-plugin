@@ -134,7 +134,10 @@ function phoneMatches(contactPhone, searchPhone) {
   // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
   // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
   // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
+<<<<<<< HEAD
   if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
+=======
+>>>>>>> origin/master
   return false;
 }
 
@@ -145,9 +148,12 @@ function nameMatches(record, searchName) {
   const search = searchName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   
   // Build full name from record fields
-  const parts = [
-    record.Nombres, record.Apellidos,
-    record.Primer_nombre, record.Segundo_nombre,
+  // Last 9 digits match (avoids false positives for Brazilian numbers where
+  // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
+  // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
+  // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
+  if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
+  return false;
     record.Primer_apellido, record.Segundo_apellido,
     record.Nombre, record.nombre,
     record.Nombre_completo
@@ -400,11 +406,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'exportAll':
       return handle((async () => {
-        const [contactos, usuarios] = await Promise.all([
+        const [contactos, usuarios, oportunidades] = await Promise.all([
           apiGet('/contactos').catch(() => []),
-          apiGet('/usuarios').catch(() => [])
+          apiGet('/usuarios').catch(() => []),
+          apiGet('/oportunidades').catch(() => [])
         ]);
-        return { contactos, estudiantes: usuarios };
+        return { contactos, estudiantes: usuarios, oportunidades };
       })());
 
     case 'exportConversation':

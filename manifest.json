@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Q10 CRM para WhatsApp Web",
   "version": "3.4.0",
-  "description": "CRM Q10 integrado con WhatsApp Web — consulta datos de estudiantes, leads y oportunidades directamente desde WhatsApp.",
+  "description": "CRM Q10 integrado con WhatsApp Web \u2014 consulta datos de estudiantes, leads y oportunidades directamente desde WhatsApp.",
   "permissions": [
     "storage",
     "activeTab",
@@ -57,7 +57,8 @@
         "icons/*",
         "sidepanel/*",
         "inject/inject.js",
-        "inject/loader.js"
+        "inject/loader.js",
+        "inject/store-adapter.js"
       ],
       "matches": [
         "https://web.whatsapp.com/*"
