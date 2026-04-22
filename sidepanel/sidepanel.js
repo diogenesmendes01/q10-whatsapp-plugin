@@ -112,12 +112,13 @@
   }
 
   function fmtMoney(v) {
-    return '$ ' + Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 0 });
+    return escHtml('$ ' + Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 0 }));
   }
 
-  // ================================================================
-  //  CSV EXPORT HELPERS
-  // ================================================================
+  function fmtDate(dateVal) {
+    if (!dateVal) return '';
+    return escHtml(new Date(dateVal).toLocaleDateString('es'));
+  }
   function generateCSV(data) {
     if (!data || !data.length) return '';
     const headers = Object.keys(data[0]);
@@ -512,9 +513,9 @@
     const detectedPhone = isPhone ? phoneOrName : currentPhone;
     const detectedName = isPhone ? currentContactName : (phoneOrName || currentContactName);
 
-    const displayHtml = isPhone 
+    const displayHtml = isPhone
       ? phoneHtml(detectedPhone)
-      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${htmlText(detectedName, '')}</span></div>`;
+      : `<div class="q10-phone-display"><span class="q10-phone-icon">${ICONS.user}</span><span class="q10-phone-number">${escHtml(detectedName || '')}</span></div>`;
 
     body().innerHTML = `
       ${displayHtml}
@@ -570,7 +571,7 @@
             <div class="q10-info-card" style="border-left:3px solid #EF4444;">
               <div class="q10-info-row"><span class="q10-info-label">Concepto</span><span class="q10-info-value">${htmlText(p.Concepto || p.Descripcion || p.Nombre)}</span></div>
               <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value"><span class="q10-badge q10-badge-red">${fmtMoney(p.Valor || p.Monto || p.Saldo)}</span></span></div>
-              ${p.Fecha_vencimiento ? `<div class="q10-info-row"><span class="q10-info-label">Vencimiento</span><span class="q10-info-value">${new Date(p.Fecha_vencimiento).toLocaleDateString('es')}</span></div>` : ''}
+              ${p.Fecha_vencimiento ? `<div class="q10-info-row"><span class="q10-info-label">Vencimiento</span><span class="q10-info-value">${fmtDate(p.Fecha_vencimiento)}</span></div>` : ''}
             </div>
           `).join('')}
         </div>`;
@@ -678,7 +679,7 @@
             <div class="q10-activity-item">
               <div class="q10-activity-type">${htmlText(a.Tipo, 'Actividad')}</div>
               <div class="q10-activity-desc">${htmlText(a.Descripcion || a.Observaciones)}</div>
-              <div class="q10-activity-date">${a.Fecha?new Date(a.Fecha).toLocaleDateString('es'):''}</div>
+              <div class="q10-activity-date">${a.Fecha ? fmtDate(a.Fecha) : ''}</div>
             </div>`).join('')}
         </div>`;
     }
