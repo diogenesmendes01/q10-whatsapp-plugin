@@ -1,0 +1,12 @@
+{
+  "name": "q10-whatsapp-plugin",
+  "version": "1.0.0",
+  "description": "Q10 CRM Chrome Extension",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "license": "MIT"
+}

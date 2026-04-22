@@ -233,6 +233,25 @@
     <div class="alert alert-error" id="alert-error"></div>
 
     <div class="card">
+      <div class="card-title">API Base URL</div>
+      <div class="card-desc">
+        URL base do Q10 API. O valor padrão é <code>https://geniusidiomas.com/api/q10</code>.
+        Altere apenas se sua instituição usa um tenant diferente.
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API Base URL</label>
+        <input type="text" class="form-input" id="api-base-url-input"
+               placeholder="https://geniusidiomas.com/api/q10">
+        <div class="form-hint">Deixe em branco para usar o valor padrão.</div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btn-save-base-url">💾 Salvar</button>
+      </div>
+    </div>
+
+    <div class="card">
       <div class="card-title">API Key do Q10</div>
       <div class="card-desc">
         Insira sua chave de API do Q10 Académico. Ela é usada para consultar dados de estudantes, contatos e oportunidades.
