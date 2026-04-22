@@ -15,4 +15,20 @@ function escHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-module.exports = { escHtml };
+function normalizeString(s) {
+  if (s == null) return '';
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function containsAllWords(haystack, needle) {
+  if (needle == null) return false;
+  const norm = normalizeString(needle).trim();
+  if (norm === '') return true;
+  if (!haystack) return false;
+  const h = normalizeString(haystack);
+  const words = norm.split(/\s+/).filter(w => w.length > 2);
+  if (words.length === 0) return true;
+  return words.every(w => h.includes(w) || h.split(/\s+/).some(hw => hw.includes(w) || w.includes(hw)));
+}
+
+module.exports = { escHtml, normalizeString, containsAllWords };

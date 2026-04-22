@@ -30,6 +30,14 @@ function setCache(key, data) {
   cache.set(key, { data, ts: Date.now() });
 }
 
+function normalizeList(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.items)) return data.items;
+  if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.results)) return data.results;
+  return [];
+}
+
 // ---------- Side Panel setup ----------
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
@@ -135,6 +143,7 @@ function phoneMatches(contactPhone, searchPhone) {
   // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
   // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
   if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
+  return false;
 }
 
 // ---------- Name matching ----------
@@ -142,34 +151,19 @@ function phoneMatches(contactPhone, searchPhone) {
 function nameMatches(record, searchName) {
   if (!searchName) return false;
   const search = searchName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
-  // Build full name from record fields
-  // Last 9 digits match (avoids false positives for Brazilian numbers where
-  // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
-  // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
-  // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
-  if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
-  return false;
+  const parts = [
+    record.Primer_nombre,
     record.Primer_apellido, record.Segundo_apellido,
     record.Nombre, record.nombre,
     record.Nombre_completo
   ].filter(Boolean);
-  
   const fullName = parts.join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  
   if (!fullName) return false;
-  
-  // Exact match
   if (fullName === search) return true;
-  
-  // Full name contains search or search contains full name
   if (fullName.includes(search) || search.includes(fullName)) return true;
-  
-  // Match by parts: all search words must appear in the full name
   const searchWords = search.split(/\s+/).filter(w => w.length > 1);
   const nameWords = fullName.split(/\s+/);
   const allMatch = searchWords.every(sw => nameWords.some(nw => nw.includes(sw) || sw.includes(nw)));
-  
   return allMatch && searchWords.length > 0;
 }
 
@@ -206,8 +200,9 @@ async function searchContacts({ phone, name }) {
   // 1. Search usuarios (alunos/estudantes)
   try {
     const usuarios = await apiGet('/usuarios');
-    if (Array.isArray(usuarios)) {
-      const match = usuarios.find(matchFn);
+    const _usuarios = normalizeList(usuarios);
+    {
+      const match = _usuarios.find(matchFn);
       if (match) {
         results.type = 'estudiante';
         results.data = match;
@@ -231,8 +226,9 @@ async function searchContacts({ phone, name }) {
   // 2. Search contactos
   try {
     const contactos = await apiGet('/contactos');
-    if (Array.isArray(contactos)) {
-      const match = contactos.find(matchFn);
+    const _contactos = normalizeList(contactos);
+    {
+      const match = _contactos.find(matchFn);
       if (match) {
         results.type = 'contacto';
         results.data = match;
@@ -263,17 +259,17 @@ async function fetchCatalogs() {
     apiGet('/medioscontacto', { Estado: true }).catch((e) => { console.warn('[Q10] /medioscontacto failed:', e.message); return []; })
   ]);
   return {
-    programas: Array.isArray(programas) ? programas : [],
-    periodos: Array.isArray(periodos) ? periodos : [],
-    sedes: Array.isArray(sedes) ? sedes : [],
-    jornadas: Array.isArray(jornadas) ? jornadas : [],
-    sedesjornadas: Array.isArray(sedesjornadas) ? sedesjornadas : [],
-    niveles: Array.isArray(niveles) ? niveles : [],
-    tiposIdentificacion: Array.isArray(tiposIdent) ? tiposIdent : [],
-    sexos: Array.isArray(sexos) ? sexos : [],
-    condicionesMatricula: Array.isArray(condicionesMat) ? condicionesMat : [],
-    mediospublicitarios: Array.isArray(mediospublicitarios) ? mediospublicitarios : [],
-    medioscontacto: Array.isArray(medioscontacto) ? medioscontacto : []
+    programas: normalizeList(programas),
+    periodos: normalizeList(periodos),
+    sedes: normalizeList(sedes),
+    jornadas: normalizeList(jornadas),
+    sedesjornadas: normalizeList(sedesjornadas),
+    niveles: normalizeList(niveles),
+    tiposIdentificacion: normalizeList(tiposIdent),
+    sexos: normalizeList(sexos),
+    condicionesMatricula: normalizeList(condicionesMat),
+    mediospublicitarios: normalizeList(mediospublicitarios),
+    medioscontacto: normalizeList(medioscontacto)
   };
 }
 
@@ -284,9 +280,9 @@ async function fetchStudentFinancials(codigoEstudiante) {
   // Only estadocuentaestudiantes is available
   try {
     const estado = await apiGet('/estadocuentaestudiantes', {}, { shortCache: true, noCache: true });
-    const estadoCuenta = Array.isArray(estado)
-      ? estado.find(e => e.Codigo_estudiante === codigoEstudiante || e.Codigo === codigoEstudiante) || null
-      : null;
+    const estadoCuenta = normalizeList(estado).find(
+      e => e.Codigo_estudiante === codigoEstudiante || e.Codigo === codigoEstudiante
+    ) || null;
     return { estadoCuenta, pagosPendientes: [], pagosRealizados: [] };
   } catch (_) {
     return { estadoCuenta: null, pagosPendientes: [], pagosRealizados: [] };
@@ -402,12 +398,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     case 'exportAll':
       return handle((async () => {
+        const today = new Date().toISOString().split('T')[0];
+        const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString().split('T')[0];
         const [contactos, usuarios, oportunidades] = await Promise.all([
           apiGet('/contactos').catch(() => []),
           apiGet('/usuarios').catch(() => []),
-          apiGet('/oportunidades').catch(() => [])
+          apiGet('/oportunidades', { Fecha_inicio: yearAgo, Fecha_fin: today }).catch(() => [])
         ]);
-        return { contactos, estudiantes: usuarios, oportunidades };
+        return {
+          contactos: normalizeList(contactos),
+          estudiantes: normalizeList(usuarios),
+          oportunidades: normalizeList(oportunidades)
+        };
       })());
 
     case 'exportConversation':
