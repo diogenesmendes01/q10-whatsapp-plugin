@@ -4,7 +4,8 @@
    v2.3 — Real Q10 API (no mocks)
    ============================================================ */
 
-const API_BASE = 'https://geniusidiomas.com/api/q10';
+// Default API base — overridable per tenant via options page
+const DEFAULT_API_BASE = 'https://geniusidiomas.com/api/q10';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CACHE_TTL_SHORT = 60 * 1000; // 1 min for financial data
 
@@ -33,6 +34,17 @@ function setCache(key, data) {
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
+// ---------- API base URL (tenant-configurable) ----------
+
+let apiBaseUrl = null; // cached in memory after first load
+
+async function getApiBaseUrl() {
+  if (apiBaseUrl) return apiBaseUrl;
+  const result = await chrome.storage.local.get(['apiBaseUrl']);
+  apiBaseUrl = (result.apiBaseUrl || '').trim() || DEFAULT_API_BASE;
+  return apiBaseUrl;
+}
+
 // ---------- API helpers ----------
 
 async function getApiKey() {
@@ -56,8 +68,9 @@ async function apiGet(endpoint, params = {}, opts = {}) {
     if (cached) return cached;
   }
 
+  const base = await getApiBaseUrl();
   const query = new URLSearchParams({ Limit: '1000', Offset: '1', ...params }).toString();
-  const url = `${API_BASE}${endpoint}?${query}`;
+  const url = `${base}${endpoint}?${query}`;
 
   const resp = await fetch(url, {
     method: 'GET',
@@ -81,7 +94,8 @@ async function apiPost(endpoint, body) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key não configurada. Configure a chave Q10 nas opções da extensão.');
 
-  const url = `${API_BASE}${endpoint}`;
+  const base = await getApiBaseUrl();
+  const url = `${base}${endpoint}`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
@@ -120,6 +134,10 @@ function phoneMatches(contactPhone, searchPhone) {
   // different area codes (e.g. 11 vs 21) can share the same last 8 digits.
   // Brazilian mobiles are 10 digits (0XX + 9XXXXXXXX) and landlines are 9 digits
   // (0XX + XXXXXXXX) after stripping leading 0; requiring 9 digits distinguishes them.)
+<<<<<<< HEAD
+  if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
+=======
+>>>>>>> origin/master
   return false;
 }
 

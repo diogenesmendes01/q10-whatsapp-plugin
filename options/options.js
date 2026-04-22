@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const keyLabel = document.getElementById('key-label');
   const testResult = document.getElementById('test-result');
 
+  // API Base URL elements
+  const inputApiBaseUrl = document.getElementById('api-base-url-input');
+  const btnSaveApiBaseUrl = document.getElementById('btn-save-base-url');
+
   function showAlert(type, msg) {
     alertSuccess.style.display = 'none';
     alertError.style.display = 'none';
@@ -223,8 +227,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnTest.disabled = true;
     btnTest.textContent = '⏳ Testando...';
     testResult.style.display = 'none';
-
-    fetch('https://geniusidiomas.com/api/q10/contacts?Limit=1&Offset=1', {
+    const baseUrl = inputApiBaseUrl.value.trim() || 'https://geniusidiomas.com/api/q10';
+    fetch(`${baseUrl}/contacts?Limit=1&Offset=1`, {
       method: 'GET',
       headers: {
         'X-Q10-Key': key,
@@ -248,6 +252,29 @@ document.addEventListener('DOMContentLoaded', () => {
     .finally(() => {
       btnTest.disabled = false;
       btnTest.textContent = '🔌 Testar Conexão';
+    });
+  });
+
+  // Load API Base URL from storage
+  chrome.storage.local.get(['apiBaseUrl'], (result) => {
+    if (result.apiBaseUrl) {
+      inputApiBaseUrl.value = result.apiBaseUrl;
+    }
+  });
+
+  // Save API Base URL
+  btnSaveApiBaseUrl.addEventListener('click', () => {
+    const url = inputApiBaseUrl.value.trim();
+    btnSaveApiBaseUrl.disabled = true;
+    btnSaveApiBaseUrl.textContent = 'Salvando...';
+    chrome.storage.local.set({ apiBaseUrl: url }, () => {
+      if (chrome.runtime.lastError) {
+        showAlert('error', 'Erro ao salvar: ' + chrome.runtime.lastError.message);
+      } else {
+        showAlert('success', 'API Base URL salva com sucesso!');
+      }
+      btnSaveApiBaseUrl.disabled = false;
+      btnSaveApiBaseUrl.textContent = '💾 Salvar';
     });
   });
 });
