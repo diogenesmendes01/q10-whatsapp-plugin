@@ -1,0 +1,14 @@
+{
+  "name": "q10-whatsapp-plugin",
+  "version": "3.4.0",
+  "description": "CRM Q10 integrado ao WhatsApp Web",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  }
+}
