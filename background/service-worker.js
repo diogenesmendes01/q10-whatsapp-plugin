@@ -116,8 +116,8 @@ function phoneMatches(contactPhone, searchPhone) {
   if (a === b) return true;
   // One contains the other (handles country code differences)
   if (a.endsWith(b) || b.endsWith(a)) return true;
-  // Last 8 digits match (handles varying country code + area code formats)
-  if (a.length >= 8 && b.length >= 8 && a.slice(-8) === b.slice(-8)) return true;
+  // Last 9 digits match (distinguishes Brazilian DDDs: mobiles 10-digit 0XX9XXXXXXXX, landlines 9-digit 0XXXXXXXXX)
+  if (a.length >= 9 && b.length >= 9 && a.slice(-9) === b.slice(-9)) return true;
   return false;
 }
 
