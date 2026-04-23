@@ -254,10 +254,9 @@ function _startProgressPolling() {
 // ================================================================
 function downloadCSV() {
   if (!_extractedContacts.length) return;
+  const csvField = v => `"${(v || '').replace(/"/g, '""')}"`;
   const rows = [['telefone', 'nome']];
-  _extractedContacts.forEach(c => {
-    rows.push([c.phone, (c.name || '').replace(/,/g, ' ')]);
-  });
+  _extractedContacts.forEach(c => rows.push([c.phone, csvField(c.name)]));
   const csv = rows.map(r => r.join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
