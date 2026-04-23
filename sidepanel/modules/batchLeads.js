@@ -215,6 +215,12 @@ let _lastStatusTs = 0;
 function _startProgressPolling() {
   if (_pollInterval) clearInterval(_pollInterval);
   _pollInterval = setInterval(() => {
+    // Auto-stop if the batch leads view was replaced by another view
+    if (!document.getElementById('bl-progress')) {
+      clearInterval(_pollInterval);
+      _pollInterval = null;
+      return;
+    }
     chrome.storage.session.get(['batchExtractStatus'], result => {
       const s = result.batchExtractStatus;
       if (!s || s.ts === _lastStatusTs) return;
@@ -270,15 +276,45 @@ function downloadCSV() {
 // ================================================================
 //  CSV IMPORT
 // ================================================================
+function _escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _parseCSVLine(line) {
+  // Handles RFC 4180: fields may be quoted, commas inside quotes are preserved
+  const fields = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      let val = '';
+      i++; // skip opening quote
+      while (i < line.length) {
+        if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
+        else if (line[i] === '"') { i++; break; }
+        else { val += line[i++]; }
+      }
+      fields.push(val);
+      if (line[i] === ',') i++; // skip comma after field
+    } else {
+      const end = line.indexOf(',', i);
+      if (end === -1) { fields.push(line.slice(i)); break; }
+      fields.push(line.slice(i, end));
+      i = end + 1;
+    }
+  }
+  return fields;
+}
+
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
-  // Detect header
   const firstLine = lines[0].toLowerCase();
   const startIdx = (firstLine.includes('telefone') || firstLine.includes('phone')) ? 1 : 0;
   return lines.slice(startIdx).map(line => {
-    const [phone, ...rest] = line.split(',');
-    return { phone: (phone || '').trim().replace(/\D/g, ''), name: rest.join(' ').trim() };
+    const fields = _parseCSVLine(line);
+    const phone = (fields[0] || '').trim().replace(/\D/g, '');
+    const name = (fields[1] || '').trim();
+    return { phone, name };
   }).filter(c => c.phone.length >= 7);
 }
 
@@ -301,8 +337,8 @@ function showImportPreview() {
   countEl.textContent = `${_importContacts.length} contatos carregados`;
   tbody.innerHTML = _importContacts.slice(0, 50).map(c => `
     <tr>
-      <td style="padding:3px 8px;border-top:1px solid #F3F4F6;">${c.phone}</td>
-      <td style="padding:3px 8px;border-top:1px solid #F3F4F6;">${c.name || '—'}</td>
+      <td style="padding:3px 8px;border-top:1px solid #F3F4F6;">${_escHtml(c.phone)}</td>
+      <td style="padding:3px 8px;border-top:1px solid #F3F4F6;">${_escHtml(c.name) || '—'}</td>
     </tr>
   `).join('');
   if (_importContacts.length > 50) {
