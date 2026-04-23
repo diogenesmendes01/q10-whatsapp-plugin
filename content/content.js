@@ -355,7 +355,7 @@
       const dataId = item.getAttribute('data-id') || '';
       // Skip groups and broadcasts
       if (!dataId.includes('@c.us')) return;
-      const phoneMatch = dataId.match(/(\d{7,15})@c\.us/);
+      const phoneMatch = dataId.match(/(\d{10,15})@c\.us/);
       if (!phoneMatch) return;
       const phone = phoneMatch[1];
 

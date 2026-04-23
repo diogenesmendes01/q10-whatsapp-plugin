@@ -4,6 +4,21 @@
    and imports a CSV file → Q10 /contactos (batch)
    ============================================================ */
 
+const CSV_MAX_BYTES = 5 * 1024 * 1024; // 5 MB limit for uploaded CSV
+
+// ================================================================
+//  chrome.storage.session compatibility (Chrome 102+)
+// ================================================================
+const _sessionFallback = {};
+
+function _sessionGet(keys, cb) {
+  if (chrome.storage?.session?.get) {
+    chrome.storage.session.get(keys, cb);
+  } else {
+    cb(Object.fromEntries(keys.map(k => [k, _sessionFallback[k] ?? undefined])));
+  }
+}
+
 // ================================================================
 //  RENDER
 // ================================================================
@@ -57,6 +72,9 @@ export function renderBatchLeads() {
           </div>
         </div>
 
+        <div id="bl-extract-error"
+          style="display:none;margin-top:8px;font-size:12px;color:#EF4444;font-weight:500;"></div>
+
         <div id="bl-result" style="display:none;margin-top:10px;">
           <div style="font-size:12px;color:#059669;font-weight:500;" id="bl-result-label"></div>
           <button id="bl-csv-btn"
@@ -73,13 +91,16 @@ export function renderBatchLeads() {
           2. Importar CSV para Q10
         </div>
         <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px;">
-          Colunas esperadas: <code>telefone,nome</code>
+          Colunas esperadas: <code>telefone,nome</code> &nbsp;·&nbsp; Máx. 5 MB
         </div>
         <label style="display:block;border:1.5px dashed #D1D5DB;border-radius:8px;padding:12px;
                       text-align:center;cursor:pointer;font-size:12px;color:#6B7280;">
-          <input type="file" id="bl-csv-input" accept=".csv" style="display:none;">
+          <input type="file" id="bl-csv-input" accept=".csv,text/csv" style="display:none;">
           &#128194; Selecionar arquivo CSV
         </label>
+
+        <div id="bl-csv-error"
+          style="display:none;margin-top:8px;font-size:12px;color:#EF4444;font-weight:500;"></div>
 
         <div id="bl-import-preview" style="display:none;margin-top:10px;">
           <div style="font-size:12px;color:#374151;font-weight:500;margin-bottom:6px;"
@@ -131,7 +152,6 @@ let _extractedContacts = [];
 let _importContacts = [];
 
 function bindBatchLeadsEvents() {
-  // Period selector
   document.getElementById('bl-period-btns').addEventListener('click', e => {
     const btn = e.target.closest('.bl-period');
     if (!btn) return;
@@ -147,22 +167,12 @@ function bindBatchLeadsEvents() {
     btn.style.color = '#0369A1';
   });
 
-  // Extract button
   document.getElementById('bl-extract-btn').addEventListener('click', startExtraction);
-
-  // Stop button
   document.getElementById('bl-stop-btn').addEventListener('click', stopExtraction);
-
-  // CSV download button (set later when data is ready)
   document.getElementById('bl-csv-btn').addEventListener('click', downloadCSV);
-
-  // CSV file input
   document.getElementById('bl-csv-input').addEventListener('change', onCSVFileSelected);
-
-  // Import button
   document.getElementById('bl-import-btn').addEventListener('click', startImport);
 
-  // Start polling for extraction progress
   _startProgressPolling();
 }
 
@@ -170,34 +180,34 @@ function bindBatchLeadsEvents() {
 //  EXTRACTION
 // ================================================================
 function getSelectedPeriod() {
-  const active = document.querySelector('.bl-period-active');
-  return active?.dataset?.period || 'Tudo';
+  return document.querySelector('.bl-period-active')?.dataset?.period || 'Tudo';
 }
 
 function periodToCutoffMs(period) {
-  const now = Date.now();
   const map = { '3m': 90, '6m': 180, '1a': 365 };
   const days = map[period];
-  if (!days) return null; // "Tudo" = no cutoff
-  return now - days * 24 * 60 * 60 * 1000;
+  return days ? Date.now() - days * 24 * 60 * 60 * 1000 : null;
 }
 
 function startExtraction() {
-  const period = getSelectedPeriod();
-  const cutoffMs = periodToCutoffMs(period);
-
   _extractedContacts = [];
 
   document.getElementById('bl-extract-btn').disabled = true;
   document.getElementById('bl-extract-btn').style.opacity = '0.6';
   document.getElementById('bl-progress').style.display = 'block';
   document.getElementById('bl-result').style.display = 'none';
+  document.getElementById('bl-extract-error').style.display = 'none';
   document.getElementById('bl-progress-label').textContent = 'Iniciando...';
+  // Reset bar to animated state
+  const bar = document.getElementById('bl-progress-bar');
+  bar.style.background = '#0EA5E9';
+  bar.style.animation = 'bl-pulse 1.2s ease-in-out infinite';
+  document.getElementById('bl-stop-btn').style.display = '';
 
+  const cutoffMs = periodToCutoffMs(getSelectedPeriod());
   chrome.runtime.sendMessage({ action: 'batchExtractStart', cutoffMs }, (resp) => {
     if (resp && !resp.ok) {
-      stopExtraction();
-      document.getElementById('bl-progress-label').textContent = resp.error || 'Erro ao iniciar';
+      _showExtractError(resp.error || 'Erro ao iniciar extração');
     }
   });
 }
@@ -209,19 +219,27 @@ function stopExtraction() {
   document.getElementById('bl-progress').style.display = 'none';
 }
 
+function _showExtractError(msg) {
+  document.getElementById('bl-extract-btn').disabled = false;
+  document.getElementById('bl-extract-btn').style.opacity = '1';
+  document.getElementById('bl-progress').style.display = 'none';
+  const err = document.getElementById('bl-extract-error');
+  err.textContent = msg;
+  err.style.display = 'block';
+}
+
 let _pollInterval = null;
 let _lastStatusTs = 0;
 
 function _startProgressPolling() {
   if (_pollInterval) clearInterval(_pollInterval);
   _pollInterval = setInterval(() => {
-    // Auto-stop if the batch leads view was replaced by another view
     if (!document.getElementById('bl-progress')) {
       clearInterval(_pollInterval);
       _pollInterval = null;
       return;
     }
-    chrome.storage.session.get(['batchExtractStatus'], result => {
+    _sessionGet(['batchExtractStatus'], result => {
       const s = result.batchExtractStatus;
       if (!s || s.ts === _lastStatusTs) return;
       _lastStatusTs = s.ts;
@@ -233,6 +251,7 @@ function _startProgressPolling() {
 
       if (s.action === 'batchExtractComplete') {
         clearInterval(_pollInterval);
+        _pollInterval = null;
         document.getElementById('bl-extract-btn').disabled = false;
         document.getElementById('bl-extract-btn').style.opacity = '1';
         document.getElementById('bl-progress').style.display = 'none';
@@ -243,12 +262,7 @@ function _startProgressPolling() {
           document.getElementById('bl-result-label').textContent =
             `✓ ${s.data.length} contatos extraídos`;
         } else {
-          document.getElementById('bl-progress').style.display = 'block';
-          document.getElementById('bl-progress-label').textContent =
-            s.error || 'Extração falhou';
-          document.getElementById('bl-stop-btn').style.display = 'none';
-          document.getElementById('bl-progress-bar').style.animationName = 'none';
-          document.getElementById('bl-progress-bar').style.background = '#EF4444';
+          _showExtractError(s.error || 'Extração falhou');
         }
       }
     });
@@ -274,27 +288,26 @@ function downloadCSV() {
 }
 
 // ================================================================
-//  CSV IMPORT
+//  HELPERS
 // ================================================================
 function _escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function _parseCSVLine(line) {
-  // Handles RFC 4180: fields may be quoted, commas inside quotes are preserved
   const fields = [];
   let i = 0;
   while (i < line.length) {
     if (line[i] === '"') {
       let val = '';
-      i++; // skip opening quote
+      i++;
       while (i < line.length) {
         if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2; }
         else if (line[i] === '"') { i++; break; }
         else { val += line[i++]; }
       }
       fields.push(val);
-      if (line[i] === ',') i++; // skip comma after field
+      if (line[i] === ',') i++;
     } else {
       const end = line.indexOf(',', i);
       if (end === -1) { fields.push(line.slice(i)); break; }
@@ -305,25 +318,58 @@ function _parseCSVLine(line) {
   return fields;
 }
 
+// ================================================================
+//  CSV IMPORT
+// ================================================================
 function parseCSV(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
   const firstLine = lines[0].toLowerCase();
   const startIdx = (firstLine.includes('telefone') || firstLine.includes('phone')) ? 1 : 0;
+
+  const seen = new Set();
   return lines.slice(startIdx).map(line => {
     const fields = _parseCSVLine(line);
     const phone = (fields[0] || '').trim().replace(/\D/g, '');
     const name = (fields[1] || '').trim();
     return { phone, name };
-  }).filter(c => c.phone.length >= 7);
+  }).filter(c => {
+    if (c.phone.length < 10) return false; // require at least 10 digits
+    if (seen.has(c.phone)) return false;   // dedup within file
+    seen.add(c.phone);
+    return true;
+  });
+}
+
+function _showCSVError(msg) {
+  const err = document.getElementById('bl-csv-error');
+  err.textContent = msg;
+  err.style.display = 'block';
+  document.getElementById('bl-import-preview').style.display = 'none';
 }
 
 function onCSVFileSelected(e) {
   const file = e.target.files[0];
   if (!file) return;
+
+  document.getElementById('bl-csv-error').style.display = 'none';
+
+  if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+    _showCSVError('Arquivo inválido. Selecione um arquivo .csv');
+    return;
+  }
+  if (file.size > CSV_MAX_BYTES) {
+    _showCSVError(`Arquivo muito grande (${(file.size/1024/1024).toFixed(1)} MB). Máx. 5 MB.`);
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = ev => {
     _importContacts = parseCSV(ev.target.result);
+    if (!_importContacts.length) {
+      _showCSVError('Nenhum contato válido encontrado. Verifique o formato: telefone,nome');
+      return;
+    }
     showImportPreview();
   };
   reader.readAsText(file, 'UTF-8');
@@ -348,6 +394,17 @@ function showImportPreview() {
   preview.style.display = 'block';
 }
 
+async function _sendChunkWithRetry(chunk, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const resp = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'batchImportContacts', contacts: chunk }, resolve);
+    });
+    if (resp && resp.ok && resp.data) return resp.data;
+    if (attempt < maxRetries) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+  }
+  return { summary: { ok: 0, fail: chunk.length } };
+}
+
 async function startImport() {
   if (!_importContacts.length) return;
 
@@ -365,21 +422,12 @@ async function startImport() {
 
   for (let i = 0; i < _importContacts.length; i += BATCH) {
     const chunk = _importContacts.slice(i, i + BATCH);
-    await new Promise(resolve => {
-      chrome.runtime.sendMessage({ action: 'batchImportContacts', contacts: chunk }, resp => {
-        if (resp && resp.ok && resp.data) {
-          okTotal += resp.data.summary.ok;
-          failTotal += resp.data.summary.fail;
-        } else {
-          failTotal += chunk.length;
-        }
-        done += chunk.length;
-        const pct = Math.round((done / _importContacts.length) * 100);
-        barEl.style.width = pct + '%';
-        statusEl.textContent = `${done}/${_importContacts.length} enviados...`;
-        resolve();
-      });
-    });
+    const result = await _sendChunkWithRetry(chunk);
+    okTotal += result.summary.ok;
+    failTotal += result.summary.fail;
+    done += chunk.length;
+    barEl.style.width = Math.round((done / _importContacts.length) * 100) + '%';
+    statusEl.textContent = `${done}/${_importContacts.length} enviados...`;
   }
 
   document.getElementById('bl-import-progress').style.display = 'none';

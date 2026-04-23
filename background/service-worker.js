@@ -464,16 +464,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'batchExtractComplete':
       // Content script → service worker → sidepanel (broadcast)
       // Store in session so sidepanel can read on connect
-      chrome.storage.session.set({
-        batchExtractStatus: {
-          action: msg.action,
-          count: msg.count || 0,
-          ok: msg.ok,
-          data: msg.data || null,
-          error: msg.error || null,
-          ts: Date.now()
-        }
-      });
+      try {
+        chrome.storage.session.set({
+          batchExtractStatus: {
+            action: msg.action,
+            count: msg.count || 0,
+            ok: msg.ok,
+            data: msg.data || null,
+            error: msg.error || null,
+            ts: Date.now()
+          }
+        });
+      } catch (_) { /* chrome.storage.session unavailable (Chrome < 102) */ }
       sendResponse({ ok: true });
       return false;
 
