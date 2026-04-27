@@ -343,6 +343,10 @@
   //  BATCH CONTACTS EXTRACTION (scroll chat list)
   // ================================================================
   let batchExtracting = false;
+  // Bumped on every start. The running loop captures its own value and exits
+  // silently if it gets superseded — prevents a stop→start race where the old
+  // loop, still asleep in setTimeout, would resume and run alongside the new one.
+  let batchGen = 0;
 
   function extractVisibleChatContacts() {
     const contacts = new Map();
@@ -374,6 +378,7 @@
   }
 
   async function runBatchExtraction(cutoffMs) {
+    const myGen = ++batchGen;
     batchExtracting = true;
     const allContacts = new Map();
     const pane = document.querySelector('#pane-side');
@@ -386,7 +391,7 @@
     let noNewCount = 0;
     let lastCount = 0;
 
-    while (batchExtracting) {
+    while (batchExtracting && myGen === batchGen) {
       const batch = extractVisibleChatContacts();
       batch.forEach((v, k) => allContacts.set(k, v));
 
@@ -424,6 +429,9 @@
       pane.scrollTop += 700;
       await new Promise(r => setTimeout(r, 700));
     }
+
+    // Superseded by a newer run — exit silently; the new run will send complete.
+    if (myGen !== batchGen) return;
 
     batchExtracting = false;
     const result = Array.from(allContacts.values());

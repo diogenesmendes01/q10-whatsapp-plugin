@@ -453,6 +453,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             return;
           }
           chrome.tabs.sendMessage(tabs[0].id, { action: msg.action, cutoffMs: msg.cutoffMs || null }, (resp) => {
+            // If the content script isn't listening (page reloading, plugin just installed,
+            // etc.) sendMessage delivers no response and sets runtime.lastError. Reading it
+            // here both surfaces the failure to the sidepanel and silences Chrome's
+            // "Unchecked runtime.lastError" warning.
+            const err = chrome.runtime.lastError;
+            if (err) {
+              sendResponse({ ok: false, error: 'Não foi possível falar com a aba do WhatsApp Web. Recarregue a página e tente novamente.' });
+              return;
+            }
             sendResponse(resp || { ok: true });
           });
         } catch (e) {
