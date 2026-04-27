@@ -204,6 +204,12 @@ function startExtraction() {
   bar.style.animation = 'bl-pulse 1.2s ease-in-out infinite';
   document.getElementById('bl-stop-btn').style.display = '';
 
+  // Ignore any stale completion event left in session storage from a previous run.
+  _lastStatusTs = Date.now();
+  // Polling stops itself when the previous extraction completes — restart it here so
+  // a second extraction in the same view still updates progress and result.
+  _startProgressPolling();
+
   const cutoffMs = periodToCutoffMs(getSelectedPeriod());
   chrome.runtime.sendMessage({ action: 'batchExtractStart', cutoffMs }, (resp) => {
     if (resp && !resp.ok) {

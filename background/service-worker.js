@@ -445,7 +445,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'batchExtractStop':
       (async () => {
         try {
-          const tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+          let tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*', active: true, currentWindow: true });
+          if (!tabs.length) tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*', active: true });
+          if (!tabs.length) tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
           if (!tabs.length) {
             sendResponse({ ok: false, error: 'WhatsApp Web não encontrado' });
             return;
@@ -491,9 +493,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             const lastName = nameParts.slice(1).join(' ') || 'WhatsApp';
             const phone = (c.phone || '').replace(/\D/g, '');
             const body = {
+              Consecutivo_oportunidad: 0,
               Nombres: firstName,
               Apellidos: lastName,
-              Detalle: [{ Tipo: 'Celular', Valor: phone }]
+              Detalle: [{ Tipo_detalle: 'Celular', Descripcion: phone }]
             };
             await apiPost('/contactos', body);
             results.push({ phone, ok: true });
@@ -503,6 +506,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         const ok = results.filter(r => r.ok).length;
         const fail = results.filter(r => !r.ok).length;
+        if (ok > 0) cache.clear();
         return { results, summary: { ok, fail } };
       })());
 
