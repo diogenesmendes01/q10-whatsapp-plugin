@@ -440,6 +440,85 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true });
       return false;
 
+    // ── Batch leads: forward start/stop to content script ──────────────
+    case 'batchExtractStart':
+    case 'batchExtractStop':
+      (async () => {
+        try {
+          let tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*', active: true, currentWindow: true });
+          if (!tabs.length) tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*', active: true });
+          if (!tabs.length) tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+          if (!tabs.length) {
+            sendResponse({ ok: false, error: 'WhatsApp Web não encontrado' });
+            return;
+          }
+          chrome.tabs.sendMessage(tabs[0].id, { action: msg.action, cutoffMs: msg.cutoffMs || null }, (resp) => {
+            // If the content script isn't listening (page reloading, plugin just installed,
+            // etc.) sendMessage delivers no response and sets runtime.lastError. Reading it
+            // here both surfaces the failure to the sidepanel and silences Chrome's
+            // "Unchecked runtime.lastError" warning.
+            const err = chrome.runtime.lastError;
+            if (err) {
+              sendResponse({ ok: false, error: 'Não foi possível falar com a aba do WhatsApp Web. Recarregue a página e tente novamente.' });
+              return;
+            }
+            sendResponse(resp || { ok: true });
+          });
+        } catch (e) {
+          sendResponse({ ok: false, error: e.message });
+        }
+      })();
+      return true;
+
+    // ── Batch leads: relay progress/complete from content script to sidepanel ──
+    case 'batchExtractProgress':
+    case 'batchExtractComplete':
+      // Content script → service worker → sidepanel (broadcast)
+      // Store in session so sidepanel can read on connect
+      try {
+        chrome.storage.session.set({
+          batchExtractStatus: {
+            action: msg.action,
+            count: msg.count || 0,
+            ok: msg.ok,
+            data: msg.data || null,
+            error: msg.error || null,
+            ts: Date.now()
+          }
+        });
+      } catch (_) { /* chrome.storage.session unavailable (Chrome < 102) */ }
+      sendResponse({ ok: true });
+      return false;
+
+    // ── Batch leads: import CSV contacts to Q10 ──────────────────────────
+    case 'batchImportContacts':
+      return handle((async () => {
+        const contacts = msg.contacts || [];
+        const results = [];
+        for (const c of contacts) {
+          try {
+            const nameParts = (c.name || '').trim().split(/\s+/);
+            const firstName = nameParts[0] || 'Contato';
+            const lastName = nameParts.slice(1).join(' ') || 'WhatsApp';
+            const phone = (c.phone || '').replace(/\D/g, '');
+            const body = {
+              Consecutivo_oportunidad: 0,
+              Nombres: firstName,
+              Apellidos: lastName,
+              Detalle: [{ Tipo_detalle: 'Celular', Descripcion: phone }]
+            };
+            await apiPost('/contactos', body);
+            results.push({ phone, ok: true });
+          } catch (e) {
+            results.push({ phone: c.phone, ok: false, error: e.message });
+          }
+        }
+        const ok = results.filter(r => r.ok).length;
+        const fail = results.filter(r => !r.ok).length;
+        if (ok > 0) cache.clear();
+        return { results, summary: { ok, fail } };
+      })());
+
     default:
       sendResponse({ ok: false, error: `Unknown action: ${msg.action}` });
       return false;

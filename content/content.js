@@ -339,6 +339,105 @@
     return messages;
   }
 
+  // ================================================================
+  //  BATCH CONTACTS EXTRACTION (scroll chat list)
+  // ================================================================
+  let batchExtracting = false;
+  // Bumped on every start. The running loop captures its own value and exits
+  // silently if it gets superseded — prevents a stop→start race where the old
+  // loop, still asleep in setTimeout, would resume and run alongside the new one.
+  let batchGen = 0;
+
+  function extractVisibleChatContacts() {
+    const contacts = new Map();
+    // WhatsApp Web stores each chat in a list item with data-id="PHONE@c.us"
+    const pane = document.querySelector('#pane-side');
+    if (!pane) return contacts;
+
+    const items = pane.querySelectorAll('[data-id]');
+    items.forEach(item => {
+      const dataId = item.getAttribute('data-id') || '';
+      // Skip groups and broadcasts
+      if (!dataId.includes('@c.us')) return;
+      const phoneMatch = dataId.match(/(\d{10,15})@c\.us/);
+      if (!phoneMatch) return;
+      const phone = phoneMatch[1];
+
+      // Try multiple selectors for the contact name
+      const nameEl =
+        item.querySelector('[data-testid="cell-frame-title"] span') ||
+        item.querySelector('span[dir="auto"]') ||
+        item.querySelector('span[title]');
+      const rawName = (nameEl?.textContent || nameEl?.getAttribute('title') || '').trim();
+      // If the "name" is just digits it's actually the phone number — store empty
+      const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
+
+      contacts.set(phone, { phone, name });
+    });
+    return contacts;
+  }
+
+  async function runBatchExtraction(cutoffMs) {
+    const myGen = ++batchGen;
+    batchExtracting = true;
+    const allContacts = new Map();
+    const pane = document.querySelector('#pane-side');
+
+    if (!pane) {
+      chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: false, error: 'Painel de conversas não encontrado. Abra o WhatsApp Web.' });
+      return;
+    }
+
+    let noNewCount = 0;
+    let lastCount = 0;
+
+    while (batchExtracting && myGen === batchGen) {
+      const batch = extractVisibleChatContacts();
+      batch.forEach((v, k) => allContacts.set(k, v));
+
+      const newCount = allContacts.size;
+      chrome.runtime.sendMessage({ action: 'batchExtractProgress', count: newCount });
+
+      // Stop if cutoff date reached — check last visible chat item timestamp
+      if (cutoffMs) {
+        const timeEls = pane.querySelectorAll('[data-testid="cell-frame-secondary-detail"] span');
+        const lastTimeEl = timeEls[timeEls.length - 1];
+        if (lastTimeEl) {
+          const txt = (lastTimeEl.textContent || '').trim();
+          // WhatsApp shows absolute dates like "12/05/24" for old chats
+          const dateMatch = txt.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+          if (dateMatch) {
+            const [, d, m, y] = dateMatch;
+            const fullYear = y.length === 2 ? 2000 + parseInt(y) : parseInt(y);
+            const chatDate = new Date(fullYear, parseInt(m) - 1, parseInt(d)).getTime();
+            if (chatDate < cutoffMs) {
+              batchExtracting = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (newCount === lastCount) {
+        noNewCount++;
+        if (noNewCount >= 4) break; // 4 scrolls with no new = reached end
+      } else {
+        noNewCount = 0;
+      }
+      lastCount = newCount;
+
+      pane.scrollTop += 700;
+      await new Promise(r => setTimeout(r, 700));
+    }
+
+    // Superseded by a newer run — exit silently; the new run will send complete.
+    if (myGen !== batchGen) return;
+
+    batchExtracting = false;
+    const result = Array.from(allContacts.values());
+    chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: true, data: result });
+  }
+
   // Listen for export request from sidepanel via service worker
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.action === 'exportConversation') {
@@ -348,6 +447,20 @@
       } catch (e) {
         sendResponse({ ok: false, error: e.message });
       }
+      return true;
+    }
+
+    if (msg.action === 'batchExtractStart') {
+      if (batchExtracting) { sendResponse({ ok: true }); return true; }
+      const cutoffMs = msg.cutoffMs || null;
+      runBatchExtraction(cutoffMs);
+      sendResponse({ ok: true });
+      return true;
+    }
+
+    if (msg.action === 'batchExtractStop') {
+      batchExtracting = false;
+      sendResponse({ ok: true });
       return true;
     }
   });

@@ -34,6 +34,10 @@
     Object.keys(m).forEach(k => window['_' + k] = m[k]);
   });
 
+  import('./modules/batchLeads.js').then(m => {
+    window._renderBatchLeads = m.renderBatchLeads;
+  });
+
   // ================================================================
   //  BRIDGE HELPERS — expose module functions to DOM inline handlers
   //  These replace the old inline <script> snippets that called
@@ -154,6 +158,13 @@
     check();
   }
 
-  waitForModules(init);
+  waitForModules(() => {
+    init();
+
+    // Batch leads button — available regardless of current view
+    document.getElementById('btn-batch-leads')?.addEventListener('click', () => {
+      if (window._renderBatchLeads) window._renderBatchLeads();
+    });
+  });
 
 })();
