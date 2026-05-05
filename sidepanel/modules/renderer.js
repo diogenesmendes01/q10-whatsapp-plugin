@@ -92,8 +92,10 @@ export function renderUnknown(phoneOrName) {
   showActions(`
     <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>
     <button class="q10-btn q10-btn-primary" id="q10-create-lead">${icon('plus','q10-btn-icon')} Crear Oportunidad</button>
-    <button class="q10-btn q10-btn-outline" id="q10-create-contacto-only">${icon('userPlus','q10-btn-icon')} Registrar Contacto</button>
   `);
+  // "Registrar Contacto" foi removido: a API Q10 exige Consecutivo_oportunidad
+  // apontando pra uma oportunidade real (404 com 0, 400 quando omitido). Não
+  // existe contacto standalone — sempre vai através de oportunidad.
 }
 
 // ================================================================

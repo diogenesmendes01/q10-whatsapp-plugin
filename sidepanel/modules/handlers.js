@@ -616,7 +616,7 @@ export function bindContactoActions(data) {
 export function bindUnknownActions(detectedPhone, detectedName) {
   document.getElementById('q10-start-enrollment')?.addEventListener('click', () => startEnrollmentWizard(detectedPhone, detectedName));
   document.getElementById('q10-create-lead')?.addEventListener('click', () => showCreateOportunidadModal(detectedPhone, detectedName));
-  document.getElementById('q10-create-contacto-only')?.addEventListener('click', () => showCreateContactoModal(detectedPhone, detectedName));
+  // q10-create-contacto-only removido — ver renderer.js:renderUnknown.
 }
 
 // ================================================================
