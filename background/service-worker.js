@@ -204,15 +204,24 @@ async function searchContacts({ phone, name }) {
     return false;
   };
 
-  // 1. Search usuarios (alunos/estudantes)
+  // 1. Search /usuarios (todos os login-users: admins, pais, alunos com login).
+  // /usuarios NÃO é equivalente a /estudiantes — antes do fix, qualquer match
+  // aqui era rotulado 'estudiante', fazendo admin/pai aparecer como aluno.
+  // Verificamos via /estudiantes/{Codigo}: 200 = aluno real, 404 = login-user
+  // que não é aluno — cai pra /contactos.
   try {
     const usuarios = await apiGet('/usuarios');
     const _usuarios = normalizeList(usuarios);
-    {
-      const match = _usuarios.find(matchFn);
-      if (match) {
+    const match = _usuarios.find(matchFn);
+    if (match) {
+      let studentRecord = null;
+      try {
+        studentRecord = await apiGet(`/estudiantes/${match.Codigo}`);
+      } catch (_) { /* 404 = não é aluno */ }
+
+      if (studentRecord) {
         results.type = 'estudiante';
-        results.data = match;
+        results.data = studentRecord;
 
         try {
           const estado = await apiGet('/estadocuentaestudiantes', {}, { shortCache: true });
@@ -225,6 +234,7 @@ async function searchContacts({ phone, name }) {
 
         return results;
       }
+      // Match em /usuarios mas não é aluno — segue para /contactos.
     }
   } catch (e) {
     console.warn('[Q10] Error searching usuarios:', e.message);
