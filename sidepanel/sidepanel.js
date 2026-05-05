@@ -81,20 +81,10 @@
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
             if (window._currentPhone) {
-              window._renderLoading('Buscando: ' + window._currentPhone + '...');
               window._searchPhone(window._currentPhone);
               return;
             }
-            window._renderLoading('Buscando: ' + newName + '...');
-            chrome.runtime.sendMessage({ action: 'searchName', name: newName }, (searchResp) => {
-              if (searchResp && searchResp.ok) {
-                window._currentResult = searchResp.data;
-                window._currentPhone = searchResp.data?.phone || window._currentPhone || null;
-                window._renderResult(searchResp.data, window._currentPhone, newName);
-              } else {
-                window._renderResult(null, window._currentPhone, newName);
-              }
-            });
+            window._searchName(newName);
           }
         });
       } else if (!changes.currentPhone) {
@@ -117,15 +107,7 @@
         if (result.currentPhone) {
           window._searchPhone(result.currentPhone);
         } else if (result.currentContactName) {
-          window._renderLoading('Buscando: ' + result.currentContactName + '...');
-          chrome.runtime.sendMessage({ action: 'searchName', name: result.currentContactName }, (searchResp) => {
-            if (searchResp && searchResp.ok) {
-              window._currentResult = searchResp.data;
-              window._renderResult(searchResp.data, result.currentPhone || null, result.currentContactName);
-            } else {
-              window._renderResult(null, result.currentPhone || null, result.currentContactName);
-            }
-          });
+          window._searchName(result.currentContactName, result.currentPhone || null);
         } else {
           window._renderNoConversation();
         }

@@ -22,6 +22,17 @@ import {
 } from './state.js';
 
 // ================================================================
+//  SEARCH TOKEN — invalida callbacks de buscas obsoletas
+//  Usuário trocando de conversa rápido dispara várias buscas em paralelo;
+//  sem token, o callback que chega por último (não necessariamente da
+//  conversa atual) sobrescreve a renderização — info "não atualiza"
+//  porque o resultado da conversa anterior é o último a renderizar.
+// ================================================================
+let _searchToken = 0;
+function nextSearchToken() { return ++_searchToken; }
+function isStaleToken(t) { return t !== _searchToken; }
+
+// ================================================================
 //  TOAST & MODAL primitives
 // ================================================================
 export function showToast(text, type = '') {
@@ -195,15 +206,7 @@ export function bindManualSearch() {
     if (isPhone) {
       searchPhone(value.replace(/[\s\-\(\)]/g, ''));
     } else {
-      renderLoading('Buscando: ' + value + '...');
-      chrome.runtime.sendMessage({ action: 'searchName', name: value }, (resp) => {
-        if (resp && resp.ok) {
-          setCurrentResult(resp.data);
-          renderResult(resp.data, null, value);
-        } else {
-          renderResult(null, null, value);
-        }
-      });
+      searchName(value);
     }
   });
 
@@ -228,12 +231,35 @@ export function searchPhone(phone) {
   if (!phone) return;
   setCurrentPhone(phone);
   renderLoading();
+  const myToken = nextSearchToken();
 
   chrome.runtime.sendMessage({ action: 'searchPhone', phone }, (resp) => {
+    if (isStaleToken(myToken)) return;
     if (chrome.runtime.lastError) { renderError('Erro de comunicação. Recarregue a extensão.'); return; }
     if (!resp || !resp.ok) { renderError(resp?.error || 'Erro desconhecido.'); return; }
     setCurrentResult(resp.data);
     renderResult(resp.data, currentPhone, currentContactName);
+  });
+}
+
+// ================================================================
+//  searchName — usado por sidepanel.js (storage listener / init)
+//  e pelo input de busca manual. Mesma proteção de token.
+// ================================================================
+export function searchName(name, fallbackPhone) {
+  if (!name) return;
+  renderLoading('Buscando: ' + name + '...');
+  const myToken = nextSearchToken();
+
+  chrome.runtime.sendMessage({ action: 'searchName', name }, (resp) => {
+    if (isStaleToken(myToken)) return;
+    if (chrome.runtime.lastError) { renderError('Erro de comunicação. Recarregue a extensão.'); return; }
+    if (resp && resp.ok) {
+      setCurrentResult(resp.data);
+      renderResult(resp.data, fallbackPhone || null, name);
+    } else {
+      renderResult(null, fallbackPhone || null, name);
+    }
   });
 }
 
