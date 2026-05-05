@@ -90,17 +90,9 @@
               if (searchResp && searchResp.ok) {
                 window._currentResult = searchResp.data;
                 window._currentPhone = searchResp.data?.phone || window._currentPhone || null;
-                if (searchResp.data.type === 'unknown') {
-                  window._renderUnknown(newName);
-                } else if (searchResp.data.type === 'estudiante') {
-                  window._renderEstudiante(searchResp.data);
-                } else if (searchResp.data.type === 'contacto') {
-                  window._renderContacto(searchResp.data);
-                } else if (searchResp.data.type === 'oportunidad') {
-                  window._renderOportunidad(searchResp.data);
-                }
+                window._renderResult(searchResp.data, window._currentPhone, newName);
               } else {
-                window._renderUnknown(newName);
+                window._renderResult(null, window._currentPhone, newName);
               }
             });
           }
@@ -127,13 +119,11 @@
         } else if (result.currentContactName) {
           window._renderLoading('Buscando: ' + result.currentContactName + '...');
           chrome.runtime.sendMessage({ action: 'searchName', name: result.currentContactName }, (searchResp) => {
-            if (searchResp && searchResp.ok && searchResp.data.type !== 'unknown') {
+            if (searchResp && searchResp.ok) {
               window._currentResult = searchResp.data;
-              if (searchResp.data.type === 'estudiante') window._renderEstudiante(searchResp.data);
-              else if (searchResp.data.type === 'contacto') window._renderContacto(searchResp.data);
-              else if (searchResp.data.type === 'oportunidad') window._renderOportunidad(searchResp.data);
+              window._renderResult(searchResp.data, result.currentPhone || null, result.currentContactName);
             } else {
-              window._renderUnknown(result.currentContactName);
+              window._renderResult(null, result.currentPhone || null, result.currentContactName);
             }
           });
         } else {

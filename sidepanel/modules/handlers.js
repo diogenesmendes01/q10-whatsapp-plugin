@@ -92,14 +92,37 @@ export function bindExportButtons() {
 }
 
 // ================================================================
+//  RENDER + BIND dispatch
+//  renderer.js só pinta DOM (por design — comentário no topo do arquivo).
+//  Os bindXActions abaixo precisam ser chamados após cada render senão
+//  os botões "Crear Oportunidad", "Matricular Alumno", "Registrar Actividad"
+//  ficam sem listener — clique não dispara nada. Use este helper em todo
+//  call site que renderiza um resultado de busca.
+// ================================================================
+export function renderResult(result, phone, name) {
+  const data = (result && result.data) || null;
+  const type = result && result.type;
+  if (type === 'estudiante') {
+    renderEstudiante(result);
+    bindEstudianteActions(data || result);
+  } else if (type === 'contacto') {
+    renderContacto(data || result);
+    bindContactoActions(data || result);
+  } else if (type === 'oportunidad') {
+    renderOportunidad(result);
+    bindOportunidadActions(data || result);
+  } else {
+    renderUnknown(phone || name);
+    bindUnknownActions(phone || null, name || null);
+  }
+}
+
+// ================================================================
 //  RESTORE VIEW helper
 // ================================================================
 export function restoreView() {
   if (currentResult) {
-    if (currentResult.type === 'estudiante') renderEstudiante(currentResult);
-    else if (currentResult.type === 'contacto') renderContacto(currentResult.data || currentResult);
-    else if (currentResult.type === 'oportunidad') renderOportunidad(currentResult);
-    else renderUnknown(currentPhone);
+    renderResult(currentResult, currentPhone, currentContactName);
   } else if (currentPhone) {
     searchPhone(currentPhone);
   } else {
@@ -176,12 +199,9 @@ export function bindManualSearch() {
       chrome.runtime.sendMessage({ action: 'searchName', name: value }, (resp) => {
         if (resp && resp.ok) {
           setCurrentResult(resp.data);
-          if (resp.data.type === 'unknown') renderUnknown(value);
-          else if (resp.data.type === 'estudiante') renderEstudiante(resp.data);
-          else if (resp.data.type === 'contacto') renderContacto(resp.data);
-          else if (resp.data.type === 'oportunidad') renderOportunidad(resp.data);
+          renderResult(resp.data, null, value);
         } else {
-          renderUnknown(value);
+          renderResult(null, null, value);
         }
       });
     }
@@ -213,10 +233,7 @@ export function searchPhone(phone) {
     if (chrome.runtime.lastError) { renderError('Erro de comunicação. Recarregue a extensão.'); return; }
     if (!resp || !resp.ok) { renderError(resp?.error || 'Erro desconhecido.'); return; }
     setCurrentResult(resp.data);
-    if (resp.data.type === 'estudiante') renderEstudiante(resp.data);
-    else if (resp.data.type === 'contacto') renderContacto(resp.data);
-    else if (resp.data.type === 'oportunidad') renderOportunidad(resp.data);
-    else renderUnknown(currentPhone);
+    renderResult(resp.data, currentPhone, currentContactName);
   });
 }
 
