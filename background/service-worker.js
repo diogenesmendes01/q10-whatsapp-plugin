@@ -350,6 +350,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'fetchStudentFinancials':
       return handle(fetchStudentFinancials(msg.codigoEstudiante));
 
+    case 'fetchNegocios':
+      // Lista negocios de uma oportunidad. Usado para popular o dropdown
+      // do modal de Crear Actividad (em vez de o vendedor digitar ID cru).
+      return handle((async () => {
+        const consec = msg.consecutivoOportunidad;
+        if (!consec) throw new Error('Consecutivo_oportunidad obrigatório');
+        return apiGet('/negocios', { Consecutivo_oportunidad: consec });
+      })());
+
     case 'fetchStudentById':
       // Lookup direto via /estudiantes/{Codigo|Numero_identificacion}.
       // Usado pelo card "não encontrado" para o caso da aluna matriculada

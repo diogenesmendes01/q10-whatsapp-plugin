@@ -589,21 +589,31 @@ export function showCreateContactoModal(phone, detectedName = null) {
 export function showCreateActividadModal(contactData) {
   removeModal();
   const overlay = el('div', 'q10-modal-overlay');
-  const presetNegocio = contactData?.Consecutivo_negocio || contactData?.Negocio_favorito?.Consecutivo_negocio || '';
+
+  // Pré-fill: aceita várias formas que cada card pode passar.
+  const presetNegocio = contactData?.Consecutivo_negocio
+    || contactData?.Negocio_favorito?.Consecutivo_negocio
+    || '';
+  const consecOportunidad = contactData?.Consecutivo_oportunidad
+    || contactData?.Negocio_favorito?.Consecutivo_oportunidad
+    || null;
+
   const TIPOS_ACTIVIDAD = ['Llamada', 'WhatsApp', 'Correo', 'Nota', 'Reunión'];
   const tipoOpts = TIPOS_ACTIVIDAD.map(t => `<option value="${htmlAttr(t)}" ${t === 'WhatsApp' ? 'selected' : ''}>${htmlText(t)}</option>`).join('');
+
+  // Defaults para Fecha/Hora: hoje + agora.
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const hora = now.toTimeString().slice(0, 5); // "HH:MM"
+
   overlay.innerHTML = `
     <div class="q10-modal">
       <div class="q10-modal-header">
-        <span class="q10-modal-title">Registrar Actividad</span>
+        <span class="q10-modal-title">Crear Actividad</span>
         <button class="q10-modal-close-btn">${icon('close')}</button>
       </div>
       <div class="q10-modal-body">
-        <div class="q10-form-group"><label class="q10-form-label">Consecutivo Negocio *</label>
-          <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${htmlAttr(String(presetNegocio))}" placeholder="ID del negocio">
-          <div style="font-size:11px;color:#6B7280;margin-top:4px;">Cree una oportunidad en el contacto antes de registrar actividades.</div>
-        </div>
-        <div class="q10-form-group"><label class="q10-form-label">Estado *</label>
+        <div class="q10-form-group"><label class="q10-form-label">Actividad *</label>
           <div style="display:flex;gap:16px;margin-top:4px;">
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:14px;">
               <input type="radio" name="q10-act-estado" value="C" checked> Completada
@@ -613,8 +623,33 @@ export function showCreateActividadModal(contactData) {
             </label>
           </div>
         </div>
-        <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
-          <select class="q10-form-select" id="q10-act-type">${tipoOpts}</select>
+        <div class="q10-form-row">
+          <div class="q10-form-group"><label class="q10-form-label">Tipo *</label>
+            <select class="q10-form-select" id="q10-act-type">
+              <option value="">Seleccione</option>
+              ${tipoOpts}
+            </select>
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Asesor responsable</label>
+            <input class="q10-form-input" id="q10-act-asesor" disabled value="Carregando..." style="background:#F3F4F6;color:#374151;">
+          </div>
+        </div>
+        <div class="q10-form-row">
+          <div class="q10-form-group"><label class="q10-form-label">Fecha *</label>
+            <input class="q10-form-input" id="q10-act-fecha" type="date" value="${htmlAttr(today)}">
+          </div>
+          <div class="q10-form-group"><label class="q10-form-label">Hora *</label>
+            <input class="q10-form-input" id="q10-act-hora" type="time" value="${htmlAttr(hora)}">
+          </div>
+        </div>
+        <div class="q10-form-group" id="q10-act-negocio-wrap"><label class="q10-form-label">Negocio *</label>
+          <select class="q10-form-select" id="q10-act-negocio-select" style="display:none;">
+            <option value="">Carregando negocios...</option>
+          </select>
+          <input class="q10-form-input" id="q10-act-negocio" type="number" min="1" value="${htmlAttr(String(presetNegocio))}" placeholder="ID del negocio">
+          <p style="font-size:11px;color:#6B7280;margin-top:4px;" id="q10-act-negocio-hint">
+            Crie uma oportunidad antes — Q10 gera 1+ negocios automaticamente.
+          </p>
         </div>
         <div class="q10-form-group" id="q10-act-resultado-wrap"><label class="q10-form-label">Resultado *</label>
           <textarea class="q10-form-textarea" id="q10-act-resultado" placeholder="Resultado de la interacción"></textarea>
@@ -633,6 +668,49 @@ export function showCreateActividadModal(contactData) {
   overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
   overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+  // Asesor: lê configurado + nome via /administrativos.
+  Promise.all([
+    sendMsg('getAsesor'),
+    sendMsg('fetchAdministrativos').catch(() => [])
+  ]).then(([asesorResp, adminList]) => {
+    const input = document.getElementById('q10-act-asesor');
+    if (!input) return;
+    const id = asesorResp?.asesorId;
+    if (!id) { input.value = '⚠️ Configure nas Opções'; input.style.color = '#B91C1C'; return; }
+    const list = Array.isArray(adminList) ? adminList : [];
+    const match = list.find(a => a.Numero_identificacion === id);
+    const name = match
+      ? [match.Primer_nombre, match.Segundo_nombre, match.Primer_apellido, match.Segundo_apellido].filter(Boolean).join(' ').trim()
+      : '';
+    input.value = name ? `${name} (${id})` : id;
+  }).catch(() => {});
+
+  // Negocios: se temos Consecutivo_oportunidad, troca o input cru por dropdown.
+  if (consecOportunidad) {
+    sendMsg('fetchNegocios', { consecutivoOportunidad: consecOportunidad })
+      .then(negocios => {
+        const list = Array.isArray(negocios) ? negocios : (negocios?.data || []);
+        if (!list.length) return; // mantém o input cru
+        const select = document.getElementById('q10-act-negocio-select');
+        const input = document.getElementById('q10-act-negocio');
+        const hint = document.getElementById('q10-act-negocio-hint');
+        if (!select || !input) return;
+        select.innerHTML = '<option value="">— Selecciona el negocio —</option>' +
+          list.map(n => {
+            const id = n.Consecutivo_negocio;
+            const nombre = n.Nombre_negocio || n.Nombre || n.Descripcion || `Negocio ${id}`;
+            const estado = n.Nombre_estado_negocio || n.Estado_negocio || '';
+            const label = estado ? `${nombre} — ${estado}` : nombre;
+            const sel = String(id) === String(presetNegocio) ? 'selected' : '';
+            return `<option value="${htmlAttr(id)}" ${sel}>${htmlText(label)}</option>`;
+          }).join('');
+        select.style.display = '';
+        input.style.display = 'none';
+        if (hint) hint.textContent = `${list.length} negocio(s) encontrado(s) nesta oportunidad.`;
+      })
+      .catch(() => { /* mantém input cru */ });
+  }
+
   overlay.querySelectorAll('input[name="q10-act-estado"]').forEach(radio => {
     radio.addEventListener('change', (ev) => {
       const isCompletada = ev.target.value === 'C';
@@ -642,25 +720,45 @@ export function showCreateActividadModal(contactData) {
   });
 
   document.getElementById('q10-act-submit').addEventListener('click', async () => {
-    const negocio = parseInt(document.getElementById('q10-act-negocio').value, 10);
+    // Negocio: prefere o select se visível; senão input cru.
+    const select = document.getElementById('q10-act-negocio-select');
+    const input = document.getElementById('q10-act-negocio');
+    const negocioRaw = (select && select.style.display !== 'none') ? select.value : input.value;
+    const negocio = parseInt(negocioRaw, 10);
     const tipo = document.getElementById('q10-act-type').value;
+    const fecha = document.getElementById('q10-act-fecha').value;
+    const hora = document.getElementById('q10-act-hora').value;
     const estado = overlay.querySelector('input[name="q10-act-estado"]:checked').value;
     const resultado = document.getElementById('q10-act-resultado').value.trim();
     const desc = document.getElementById('q10-act-desc').value.trim();
-    if (!negocio || Number.isNaN(negocio)) { showToast('Consecutivo negocio obligatorio', 'error'); return; }
-    if (estado === 'C' && !resultado) { showToast('Resultado obligatorio para actividades completadas', 'error'); return; }
-    if (estado === 'P' && !desc) { showToast('Descripción obligatoria para actividades programadas', 'error'); return; }
+
+    if (!negocio || Number.isNaN(negocio)) { showToast('Negocio é obrigatório', 'error'); return; }
+    if (!tipo) { showToast('Tipo é obrigatório', 'error'); return; }
+    if (!fecha) { showToast('Fecha é obrigatória', 'error'); return; }
+    if (!hora) { showToast('Hora é obrigatória', 'error'); return; }
+    if (estado === 'C' && !resultado) { showToast('Resultado obrigatório para Completada', 'error'); return; }
+    if (estado === 'P' && !desc) { showToast('Descripción obrigatória para Programada', 'error'); return; }
+
     const btn = document.getElementById('q10-act-submit');
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
-      const body = { Consecutivo_negocio: negocio, Tipo_actividad: tipo, Estado_actividad: estado };
+      const body = {
+        Consecutivo_negocio: negocio,
+        Tipo_actividad: tipo,
+        Estado_actividad: estado,
+        Fecha_actividad: `${fecha}T${hora}:00`,
+      };
       if (estado === 'C') body.Resultado_actividad = resultado;
       else body.Descripcion_actividad = desc;
       await sendMsg('createActividad', { body });
       showToast('Actividad registrada ✓', 'success');
       removeModal();
     } catch (err) {
-      showToast(err.message, 'error');
+      const msg = err.message || '';
+      const friendly = /no se encuentra registrado un asesor/i.test(msg)
+        ? 'O asesor configurado nas Opções não está cadastrado como asesor no Q10. Veja Q10 → Mercadeo → Asesores.'
+        : msg;
+      showToast(friendly, 'error');
       btn.disabled = false; btn.textContent = 'Registrar';
     }
   });
