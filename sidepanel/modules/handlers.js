@@ -347,23 +347,46 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
       </div>
       <div class="q10-modal-body">
         <div class="q10-form-group">
-          <label class="q10-form-label">Nome do Lead *</label>
-          <input class="q10-form-input" id="q10-op-nome" value="${htmlAttr(prefillName)}" placeholder="Ex: João Silva — Inglês Básico">
+          <label class="q10-form-label">Identificación *</label>
+          <input class="q10-form-input" id="q10-op-ident" value="${htmlAttr(prefillName)}" placeholder="Nome do lead (ex.: João Silva)">
+          <p style="font-size:11px;color:#6B7280;margin:4px 0 0">Aceita nome ou documento. Vai virar o título da oportunidade no Q10.</p>
         </div>
         <div class="q10-form-row">
-          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${htmlAttr(prefillPhone)}" placeholder="19988145438"></div>
-          <div class="q10-form-group"><label class="q10-form-label">Email</label><input class="q10-form-input" id="q10-op-email" type="email" value="${htmlAttr(prefillEmail)}" placeholder="email@ejemplo.com"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Correo electrónico</label><input class="q10-form-input" id="q10-op-email" type="email" value="${htmlAttr(prefillEmail)}" placeholder="email@ejemplo.com"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${htmlAttr(prefillPhone)}" placeholder="${htmlAttr(prefillPhone || '50686906161')}"></div>
+        </div>
+        <div class="q10-form-row">
+          <div class="q10-form-group"><label class="q10-form-label">Teléfono</label><input class="q10-form-input" id="q10-op-tel" placeholder="Telefone fixo (opcional)"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Dirección</label><input class="q10-form-input" id="q10-op-addr" placeholder="Endereço (opcional)"></div>
+        </div>
+        <div class="q10-form-row">
+          <div class="q10-form-group"><label class="q10-form-label">Municipio</label><input class="q10-form-input" id="q10-op-muni" placeholder="Município (opcional)"></div>
+          <div class="q10-form-group"><label class="q10-form-label">Distrito</label><input class="q10-form-input" id="q10-op-dist" placeholder="Distrito (opcional)"></div>
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Asesor</label>
+          <input class="q10-form-input" id="q10-op-asesor" disabled value="Carregando..." style="background:#F3F4F6;color:#374151;">
+          <p style="font-size:11px;color:#6B7280;margin:4px 0 0">Configurado nas Opções da extensão.</p>
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">¿Cómo se enteró? *</label>
+          <select class="q10-form-select" id="q10-op-medio-pub"><option value="">Carregando...</option></select>
         </div>
         <div class="q10-form-row">
           <div class="q10-form-group">
-            <label class="q10-form-label">Como nos conheceu?</label>
-            <select class="q10-form-select" id="q10-op-medio-pub"><option value="">Carregando...</option></select>
-          </div>
-          <div class="q10-form-group">
-            <label class="q10-form-label">Canal de contato</label>
+            <label class="q10-form-label">Medio de contacto</label>
             <select class="q10-form-select" id="q10-op-medio-ctc"><option value="">Carregando...</option></select>
           </div>
+          <div class="q10-form-group">
+            <label class="q10-form-label">¿Ha estudiado anteriormente Portugues?</label>
+            <select class="q10-form-select" id="q10-op-cf-portugues">
+              <option value="">— Não informado —</option>
+              <option value="Sí">Sí</option>
+              <option value="No">No</option>
+            </select>
+          </div>
         </div>
+        <p style="font-size:11px;color:#6B7280;margin:0">* Campos obrigatórios</p>
       </div>
       <div class="q10-modal-footer">
         <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
@@ -375,15 +398,16 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
   overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
   overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
+  // Carrega medios + asesor configurado em paralelo.
   sendMsg('fetchMedios').then(data => {
     const pubSel = document.getElementById('q10-op-medio-pub');
     const ctcSel = document.getElementById('q10-op-medio-ctc');
     if (!pubSel || !ctcSel) return;
-    pubSel.innerHTML = '<option value="">— Como conheceu? —</option>' +
+    pubSel.innerHTML = '<option value="">— Selecciona —</option>' +
       (data.mediospublicitarios || []).map(m =>
         `<option value="${htmlAttr(m.Consecutivo)}">${htmlText(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
       ).join('');
-    ctcSel.innerHTML = '<option value="">— Canal —</option>' +
+    ctcSel.innerHTML = '<option value="">— Selecciona —</option>' +
       (data.medioscontacto || []).map(m =>
         `<option value="${htmlAttr(m.Consecutivo)}">${htmlText(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
       ).join('');
@@ -397,28 +421,79 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
     if (ctcSel) ctcSel.innerHTML = '<option value="">— Não disponível —</option>';
   });
 
+  // Asesor: lê o id salvo + busca o nome no /administrativos cache.
+  Promise.all([
+    sendMsg('getAsesor'),
+    sendMsg('fetchAdministrativos').catch(() => ({ data: [] }))
+  ]).then(([asesorResp, adminResp]) => {
+    const asesorInput = document.getElementById('q10-op-asesor');
+    if (!asesorInput) return;
+    const id = asesorResp?.asesorId;
+    if (!id) {
+      asesorInput.value = '⚠️ Não configurado — abra as Opções da extensão';
+      asesorInput.style.color = '#B91C1C';
+      return;
+    }
+    const list = Array.isArray(adminResp) ? adminResp : (adminResp?.data || []);
+    const match = list.find(a => a.Numero_identificacion === id);
+    const name = match
+      ? [match.Primer_nombre, match.Segundo_nombre, match.Primer_apellido, match.Segundo_apellido].filter(Boolean).join(' ').trim()
+      : '';
+    asesorInput.value = name ? `${name} (${id})` : id;
+  }).catch(() => {
+    const asesorInput = document.getElementById('q10-op-asesor');
+    if (asesorInput) asesorInput.value = '— Erro carregando asesor —';
+  });
+
   document.getElementById('q10-op-submit').addEventListener('click', async () => {
-    const nome = document.getElementById('q10-op-nome').value.trim();
-    if (!nome) { showToast('Nome do lead é obrigatório', 'error'); document.getElementById('q10-op-nome').style.borderColor='#EF4444'; return; }
+    const ident = document.getElementById('q10-op-ident').value.trim();
+    const medioPub = document.getElementById('q10-op-medio-pub').value;
+    if (!ident) { showToast('Identificación é obrigatória', 'error'); document.getElementById('q10-op-ident').style.borderColor='#EF4444'; return; }
+    if (!medioPub) { showToast('¿Cómo se enteró? é obrigatório', 'error'); document.getElementById('q10-op-medio-pub').style.borderColor='#EF4444'; return; }
+
     const btn = document.getElementById('q10-op-submit');
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
-      const body = { Nombre_oportunidad: nome };
       const cel = document.getElementById('q10-op-phone').value.replace(/\D/g,'').slice(-12);
       const email = document.getElementById('q10-op-email').value.trim();
-      const medioPub = document.getElementById('q10-op-medio-pub').value;
+      const tel = document.getElementById('q10-op-tel').value.trim();
+      const addr = document.getElementById('q10-op-addr').value.trim();
+      const muni = document.getElementById('q10-op-muni').value.trim();
+      const dist = document.getElementById('q10-op-dist').value.trim();
       const medioCtc = document.getElementById('q10-op-medio-ctc').value;
+      const cfPortugues = document.getElementById('q10-op-cf-portugues').value;
+
+      const body = {
+        Nombre_oportunidad: ident,
+        Numero_identificacion_oportunidad: ident,
+        Consecutivo_como_se_entero: parseInt(medioPub),
+      };
       if (cel) body.Celular = cel;
       if (email) body.Correo_electronico = email;
-      if (medioPub) body.Consecutivo_como_se_entero = parseInt(medioPub);
+      if (tel) body.Telefono = tel;
+      if (addr) body.Direccion = addr;
+      if (muni) body.Municipio = muni;
+      if (dist) body.Distrito = dist;
       if (medioCtc) body.Consecutivo_medio_contacto = parseInt(medioCtc);
+      if (cfPortugues) {
+        // Custom field "¿Ha estudiando anteriormente Portugues?"
+        // (Consecutivo_campo_personalizado=1, Tipo_campo "Sí o No").
+        body.Campos_personalizados = [
+          { Consecutivo_campo_personalizado: 1, Valor: cfPortugues }
+        ];
+      }
       await sendMsg('createOportunidad', { body });
       showToast('Lead registrado en Q10 ✓', 'success');
       removeModal();
       sendMsg('clearCache').catch(() => {});
       if (currentPhone) searchPhone(currentPhone);
     } catch (err) {
-      showToast(err.message, 'error');
+      // Mensagem amigável para o erro mais comum: asesor não cadastrado.
+      const msg = err.message || '';
+      const friendly = /no se encuentra registrado un asesor/i.test(msg)
+        ? 'O asesor selecionado nas Opções não está cadastrado como asesor no Q10. Vá em Q10 → Mercadeo → Asesores e cadastre, ou troque o asesor nas Opções da extensão.'
+        : msg;
+      showToast(friendly, 'error');
       btn.disabled = false; btn.textContent = 'Registrar Lead';
     }
   });
