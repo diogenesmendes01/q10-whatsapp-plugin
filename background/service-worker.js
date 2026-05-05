@@ -350,6 +350,26 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'fetchStudentFinancials':
       return handle(fetchStudentFinancials(msg.codigoEstudiante));
 
+    case 'fetchStudentById':
+      // Lookup direto via /estudiantes/{Codigo|Numero_identificacion}.
+      // Usado pelo card "não encontrado" para o caso da aluna matriculada
+      // que não aparece na busca por telefone (não tem login → não está em
+      // /usuarios; não foi cadastrada como contacto/lead).
+      return handle((async () => {
+        const id = (msg.id || '').trim();
+        if (!id) throw new Error('ID vazio.');
+        const studentRecord = await apiGet(`/estudiantes/${encodeURIComponent(id)}`);
+        try {
+          const estado = await apiGet('/estadocuentaestudiantes', {}, { shortCache: true });
+          const estadoCuenta = Array.isArray(estado)
+            ? estado.find(e => e.Codigo_estudiante === studentRecord.Codigo || e.Codigo === studentRecord.Codigo) || null
+            : null;
+          return { type: 'estudiante', data: studentRecord, estadoCuenta, phone: studentRecord.Celular || studentRecord.Telefono || null, name: null };
+        } catch (_) {
+          return { type: 'estudiante', data: studentRecord, phone: studentRecord.Celular || studentRecord.Telefono || null, name: null };
+        }
+      })());
+
     case 'createContacto':
       return handle(apiPost('/contactos', msg.body));
 

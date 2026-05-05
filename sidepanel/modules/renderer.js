@@ -88,6 +88,17 @@ export function renderUnknown(phoneOrName) {
       <span class="q10-state-icon">${icon('userPlus')}</span>
       <div class="q10-state-title">Contacto no encontrado</div>
       <div class="q10-state-text">${isPhone ? 'Este número no está registrado en Q10.' : 'Este contacto no está registrado en Q10.'}</div>
+    </div>
+    <div class="q10-section" style="margin-top:8px;">
+      <div class="q10-section-title">${icon('search','q10-section-icon')} ¿Ya es estudiante?</div>
+      <p style="font-size:12px;color:#6B7280;margin:0 0 8px;">
+        Si tu contacto es un estudiante matriculado pero su WhatsApp no estaba registrado, busca por código o cédula.
+      </p>
+      <div style="display:flex;gap:6px;">
+        <input class="q10-form-input" id="q10-find-student-input" placeholder="Código o número de identificación" style="flex:1;">
+        <button class="q10-btn q10-btn-outline" id="q10-find-student-btn" style="padding:8px 14px;">${icon('search','q10-btn-icon')} Buscar</button>
+      </div>
+      <p id="q10-find-student-msg" style="font-size:11px;color:#B91C1C;margin:6px 0 0;display:none;"></p>
     </div>`;
   showActions(`
     <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>

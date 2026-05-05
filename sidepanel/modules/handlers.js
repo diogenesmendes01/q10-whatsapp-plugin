@@ -692,6 +692,37 @@ export function bindUnknownActions(detectedPhone, detectedName) {
   document.getElementById('q10-start-enrollment')?.addEventListener('click', () => startEnrollmentWizard(detectedPhone, detectedName));
   document.getElementById('q10-create-lead')?.addEventListener('click', () => showCreateOportunidadModal(detectedPhone, detectedName));
   // q10-create-contacto-only removido — ver renderer.js:renderUnknown.
+
+  // Busca manual por código/cédula — fallback para aluno matriculado que
+  // não aparece na busca por telefone (sem /usuarios login + sem /contactos).
+  const findInput = document.getElementById('q10-find-student-input');
+  const findBtn = document.getElementById('q10-find-student-btn');
+  const findMsg = document.getElementById('q10-find-student-msg');
+  if (findInput && findBtn) {
+    const doFind = async () => {
+      const id = findInput.value.trim();
+      if (!id) return;
+      findMsg.style.display = 'none';
+      findBtn.disabled = true;
+      const originalText = findBtn.innerHTML;
+      findBtn.innerHTML = `${icon('refresh','q10-btn-icon')} Buscando...`;
+      try {
+        const result = await sendMsg('fetchStudentById', { id });
+        setCurrentResult(result);
+        renderResult(result, detectedPhone || result.phone, detectedName);
+      } catch (err) {
+        const friendly = /no se encuentra registrado un estudiante/i.test(err.message || '')
+          ? 'No se encontró estudiante con ese código o identificación.'
+          : (err.message || 'Erro buscando estudiante.');
+        findMsg.textContent = friendly;
+        findMsg.style.display = 'block';
+        findBtn.disabled = false;
+        findBtn.innerHTML = originalText;
+      }
+    };
+    findBtn.addEventListener('click', doFind);
+    findInput.addEventListener('keydown', e => { if (e.key === 'Enter') doFind(); });
+  }
 }
 
 // ================================================================
