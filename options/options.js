@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnTest.textContent = '⏳ Testando...';
     testResult.style.display = 'none';
     const baseUrl = inputApiBaseUrl.value.trim() || 'https://geniusidiomas.com/api/q10';
-    fetch(`${baseUrl}/contacts?Limit=1&Offset=1`, {
+    fetch(`${baseUrl}/contactos?Limit=1&Offset=1`, {
       method: 'GET',
       headers: {
         'X-Q10-Key': key,
