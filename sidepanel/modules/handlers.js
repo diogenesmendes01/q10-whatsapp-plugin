@@ -486,7 +486,12 @@ export function showCreateContactoModal(phone, detectedName = null) {
       const detalle = [];
       if (celularQ10) detalle.push({ Tipo_detalle: 'Celular', Descripcion: celularQ10 });
       if (email) detalle.push({ Tipo_detalle: 'Email', Descripcion: email });
-      await sendMsg('createContacto', { body: { Consecutivo_oportunidad: 0, Nombres: fname, Apellidos: lname, Detalle: detalle } });
+      // Não enviar Consecutivo_oportunidad para contacto standalone — a Q10
+      // tenta resolver o consecutivo (0 = não existe) e devolve 404
+      // "No se encontró una oportunidad con el consecutivo especificado".
+      // Probe live: POST /contactos {} reclama só de Detalle[], então este
+      // campo é opcional e só faz sentido para vincular a uma oportunidade real.
+      await sendMsg('createContacto', { body: { Nombres: fname, Apellidos: lname, Detalle: detalle } });
       showToast('Contacto registrado ✓', 'success');
       removeModal();
       sendMsg('clearCache').catch(() => {});
