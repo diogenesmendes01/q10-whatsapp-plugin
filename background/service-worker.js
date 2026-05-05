@@ -5,7 +5,7 @@
    ============================================================ */
 
 // Default API base — overridable per tenant via options page
-const DEFAULT_API_BASE = 'https://geniusidiomas.com/api/q10';
+const DEFAULT_API_BASE = 'https://api.q10.com/v1';
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const CACHE_TTL_SHORT = 60 * 1000; // 1 min for financial data
 
@@ -55,6 +55,13 @@ async function getApiBaseUrl() {
 
 // ---------- API helpers ----------
 
+// Q10 oficial (Azure APIM em api.q10.com) usa header `Api-Key`.
+// Proxies do tipo geniusidiomas.com/api/q10 usam `X-Q10-Key`.
+// Mandar o header errado retorna 401 com mensagem do APIM ("missing subscription key").
+function authHeaderFor(baseUrl) {
+  return /api\.q10\.com/i.test(baseUrl) ? 'Api-Key' : 'X-Q10-Key';
+}
+
 async function getApiKey() {
   const result = await chrome.storage.sync.get(['q10ApiKey']);
   return result.q10ApiKey || null;
@@ -83,7 +90,7 @@ async function apiGet(endpoint, params = {}, opts = {}) {
   const resp = await fetch(url, {
     method: 'GET',
     headers: {
-      'X-Q10-Key': apiKey,
+      [authHeaderFor(base)]: apiKey,
       'Content-Type': 'application/json'
     }
   });
@@ -107,7 +114,7 @@ async function apiPost(endpoint, body) {
   const resp = await fetch(url, {
     method: 'POST',
     headers: {
-      'X-Q10-Key': apiKey,
+      [authHeaderFor(base)]: apiKey,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)

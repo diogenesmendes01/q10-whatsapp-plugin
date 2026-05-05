@@ -5,7 +5,7 @@ Extensão Chrome (Manifest V3) que integra o **Q10 Académico** dentro do **What
 - **Versão:** 3.4.0
 - **Plataforma:** Chrome / Edge / Brave (MV3, side panel API)
 - **Alvo:** `https://web.whatsapp.com/*`
-- **Backend:** Q10 Jack API (via proxy `geniusidiomas.com/api/q10` — ver [docs/q10-api-notes.md](docs/q10-api-notes.md))
+- **Backend:** Q10 Jack API oficial — `https://api.q10.com/v1` (header `Api-Key`). Suporta também proxies tipo `geniusidiomas.com/api/q10` com header `X-Q10-Key`. Ver [docs/q10-api-notes.md](docs/q10-api-notes.md).
 
 ---
 
@@ -118,8 +118,9 @@ node --check options/options.js
 
 ### Convenções da Q10 API
 
-- Base URL do proxy: `https://geniusidiomas.com/api/q10` (aceita header `X-Q10-Key`)
-- Base URL oficial: `https://api.q10.com/v1` (aceita header `Api-Key`)
+- Base URL oficial (default): `https://api.q10.com/v1` — header `Api-Key`
+- Base URL de proxy alternativo: `https://geniusidiomas.com/api/q10` — header `X-Q10-Key`
+- O código escolhe o header automaticamente pelo host configurado em **Opções → API Base URL**
 - Payloads aceitam `Estado` como **boolean** (`true`/`false`), **não** string (`'Activo'`)
 - Endpoints com nomes surpreendentes: `/condicionesMatricula` (camelCase), `/sedesjornadas` (sem hífen)
 

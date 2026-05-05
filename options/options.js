@@ -227,11 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btnTest.disabled = true;
     btnTest.textContent = '⏳ Testando...';
     testResult.style.display = 'none';
-    const baseUrl = inputApiBaseUrl.value.trim() || 'https://geniusidiomas.com/api/q10';
+    const baseUrl = inputApiBaseUrl.value.trim() || 'https://api.q10.com/v1';
+    // Q10 oficial usa Api-Key (Azure APIM); proxies tipo geniusidiomas.com usam X-Q10-Key.
+    const headerName = /api\.q10\.com/i.test(baseUrl) ? 'Api-Key' : 'X-Q10-Key';
     fetch(`${baseUrl}/contactos?Limit=1&Offset=1`, {
       method: 'GET',
       headers: {
-        'X-Q10-Key': key,
+        [headerName]: key,
         'Content-Type': 'application/json'
       }
     })
