@@ -9,6 +9,15 @@ export let currentResult = null;
 export let wizardState = null;
 export let catalogsCache = null;
 
+// Importadores não podem reatribuir bindings exportados de outro módulo (TypeError
+// em strict mode dos ES modules). Estes setters mutam dentro deste módulo, e como
+// `let` exports são bindings vivos, importadores leem o valor atualizado.
+export function setCurrentPhone(v) { currentPhone = v; }
+export function setCurrentContactName(v) { currentContactName = v; }
+export function setCurrentResult(v) { currentResult = v; }
+export function setWizardState(v) { wizardState = v; }
+export function setCatalogsCache(v) { catalogsCache = v; }
+
 export const AVAILABLE_TAGS = [
   { id: 'interested', label: 'Interesado', color: '#3B82F6', bg: '#EFF6FF' },
   { id: 'enrolled', label: 'Matriculado', color: '#10B981', bg: '#ECFDF5' },

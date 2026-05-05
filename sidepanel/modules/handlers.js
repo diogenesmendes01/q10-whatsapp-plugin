@@ -17,6 +17,7 @@ import {
 } from './helpers.js';
 import {
   currentPhone, currentContactName, currentResult, wizardState, catalogsCache,
+  setCurrentPhone, setCurrentResult, setWizardState, setCatalogsCache,
   getContactTags, setContactTags, getContactNotes, addContactNote, deleteContactNote
 } from './state.js';
 
@@ -174,7 +175,7 @@ export function bindManualSearch() {
       renderLoading('Buscando: ' + value + '...');
       chrome.runtime.sendMessage({ action: 'searchName', name: value }, (resp) => {
         if (resp && resp.ok) {
-          currentResult = resp.data;
+          setCurrentResult(resp.data);
           if (resp.data.type === 'unknown') renderUnknown(value);
           else if (resp.data.type === 'estudiante') renderEstudiante(resp.data);
           else if (resp.data.type === 'contacto') renderContacto(resp.data);
@@ -205,13 +206,13 @@ export function bindRetryHandler() {
 // ================================================================
 export function searchPhone(phone) {
   if (!phone) return;
-  currentPhone = phone;
+  setCurrentPhone(phone);
   renderLoading();
 
   chrome.runtime.sendMessage({ action: 'searchPhone', phone }, (resp) => {
     if (chrome.runtime.lastError) { renderError('Erro de comunicação. Recarregue a extensão.'); return; }
     if (!resp || !resp.ok) { renderError(resp?.error || 'Erro desconhecido.'); return; }
-    currentResult = resp.data;
+    setCurrentResult(resp.data);
     if (resp.data.type === 'estudiante') renderEstudiante(resp.data);
     else if (resp.data.type === 'contacto') renderContacto(resp.data);
     else if (resp.data.type === 'oportunidad') renderOportunidad(resp.data);
@@ -574,18 +575,18 @@ export function bindUnknownActions(detectedPhone, detectedName) {
 //  WIZARD orchestration (exported so sidepanel.js can call it)
 // ================================================================
 export async function startEnrollmentWizard(phone, existingData) {
-  wizardState = {
+  setWizardState({
     step: 0,
     phone: phone || currentPhone,
     prefill: existingData || {},
     results: {}
-  };
+  });
 
   if (!catalogsCache) {
     body().innerHTML = `<div class="q10-state"><div class="q10-spinner"></div><div class="q10-state-title">Cargando catálogos...</div></div>`;
     hideActions();
     try {
-      catalogsCache = await sendMsg('fetchCatalogs');
+      setCatalogsCache(await sendMsg('fetchCatalogs'));
     } catch (err) {
       renderError('Error cargando catálogos: ' + err.message);
       return;

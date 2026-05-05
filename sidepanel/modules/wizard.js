@@ -8,7 +8,8 @@ import * as handlers from './handlers.js';
 import { icon, htmlText, htmlAttr, fullNameHtml, escHtml } from './helpers.js';
 import {
   wizardState, catalogsCache,
-  currentPhone, currentResult
+  currentPhone, currentResult,
+  setWizardState
 } from './state.js';
 import { body, hideActions, showActions } from './renderer.js';
 
@@ -21,7 +22,7 @@ export const WIZARD_STEPS = [
 ];
 
 export function cancelWizard() {
-  wizardState = null;
+  setWizardState(null);
   if (currentResult) {
     if (currentResult.type === 'estudiante') handlers.renderEstudiante(currentResult);
     else if (currentResult.type === 'contacto') handlers.renderContacto(currentResult.data || currentResult);
@@ -450,13 +451,13 @@ export function renderWizardComplete() {
   `);
 
   document.getElementById('wz-finish').addEventListener('click', () => {
-    wizardState = null;
+    setWizardState(null);
     sendMsg('clearCache').catch(() => {});
     if (currentPhone) handlers.searchPhone(currentPhone);
   });
   document.getElementById('wz-new').addEventListener('click', () => {
     const phone = wizardState.phone;
-    wizardState = null;
+    setWizardState(null);
     startEnrollmentWizard(phone);
   });
 }
