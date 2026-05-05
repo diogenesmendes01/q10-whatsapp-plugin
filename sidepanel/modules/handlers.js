@@ -399,18 +399,26 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
   overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
 
   // Carrega medios + asesor configurado em paralelo.
+  // API real retorna Consecutivo_medio_publicitario / Nombre_medio_publicitario
+  // (e _medio_contacto pro outro endpoint), não Consecutivo / Nombre genéricos.
+  // Fallbacks cobrem ambos os formatos caso o tenant retorne diferente.
   sendMsg('fetchMedios').then(data => {
     const pubSel = document.getElementById('q10-op-medio-pub');
     const ctcSel = document.getElementById('q10-op-medio-ctc');
     if (!pubSel || !ctcSel) return;
+    const optHtml = (id, name) => `<option value="${htmlAttr(id)}">${htmlText(name)}</option>`;
     pubSel.innerHTML = '<option value="">— Selecciona —</option>' +
-      (data.mediospublicitarios || []).map(m =>
-        `<option value="${htmlAttr(m.Consecutivo)}">${htmlText(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
-      ).join('');
+      (data.mediospublicitarios || []).map(m => {
+        const id = m.Consecutivo_medio_publicitario ?? m.Consecutivo;
+        const name = m.Nombre_medio_publicitario || m.Nombre || m.Descripcion || id;
+        return optHtml(id, name);
+      }).join('');
     ctcSel.innerHTML = '<option value="">— Selecciona —</option>' +
-      (data.medioscontacto || []).map(m =>
-        `<option value="${htmlAttr(m.Consecutivo)}">${htmlText(m.Nombre || m.Descripcion || m.Consecutivo)}</option>`
-      ).join('');
+      (data.medioscontacto || []).map(m => {
+        const id = m.Consecutivo_medio_contacto ?? m.Consecutivo;
+        const name = m.Nombre_medio_contacto || m.Nombre || m.Descripcion || id;
+        return optHtml(id, name);
+      }).join('');
     Array.from(ctcSel.options).forEach(opt => {
       if (opt.text.toLowerCase().includes('whatsapp')) ctcSel.value = opt.value;
     });
