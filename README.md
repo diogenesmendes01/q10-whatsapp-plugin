@@ -2,7 +2,7 @@
 
 Extensão Chrome (Manifest V3) que integra o **Q10 Académico** dentro do **WhatsApp Web**. Detecta automaticamente o contato da conversa ativa, cruza com o CRM do Q10 e expõe ações de atendimento (criar lead, registrar atividade, matricular estudante, gerar cobro) num painel lateral — sem o vendedor precisar alternar entre abas.
 
-- **Versão:** 3.4.0
+- **Versão:** 3.5.0
 - **Plataforma:** Chrome / Edge / Brave (MV3, side panel API)
 - **Alvo:** `https://web.whatsapp.com/*`
 - **Backend:** Q10 Jack API oficial — `https://api.q10.com/v1` (header `Api-Key`). Suporta também proxies tipo `geniusidiomas.com/api/q10` com header `X-Q10-Key`. Ver [docs/q10-api-notes.md](docs/q10-api-notes.md).
