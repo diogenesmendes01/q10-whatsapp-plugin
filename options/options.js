@@ -264,7 +264,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save API Base URL
   btnSaveApiBaseUrl.addEventListener('click', () => {
-    const url = inputApiBaseUrl.value.trim();
+    let url = inputApiBaseUrl.value.trim();
+    // Sem protocolo, fetch() interpreta como caminho relativo a chrome-extension://...
+    // e dá "Failed to fetch". Auto-prefixa https:// pra evitar essa armadilha silenciosa.
+    if (url && !/^https?:\/\//i.test(url)) {
+      url = 'https://' + url;
+      inputApiBaseUrl.value = url;
+    }
     btnSaveApiBaseUrl.disabled = true;
     btnSaveApiBaseUrl.textContent = 'Salvando...';
     chrome.storage.local.set({ apiBaseUrl: url }, () => {
