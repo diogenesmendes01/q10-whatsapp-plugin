@@ -353,7 +353,10 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
   // the chat's phone if it just got opened.
   Promise.all([
     sendMsg('fetchMedios').catch(() => ({ mediospublicitarios: [], medioscontacto: [] })),
-    sendMsg('getAsesor').catch(() => ({ asesorId: null })),
+    // Service worker action is named getAsesorId — getAsesor was a stale
+    // typo in the legacy modal code that always silently fell back via the
+    // catch handler.
+    sendMsg('getAsesorId').catch(() => ({ asesorId: null })),
     sendMsg('fetchAdministrativos').catch(() => ({ data: [] })),
   ]).then(([mediosData, asesorResp, adminResp]) => {
     // Re-derive phone now that resolution had time to happen.
@@ -708,7 +711,7 @@ export function showCreateActividadModal(contactData) {
 
   // Asesor: lê configurado + nome via /administrativos.
   Promise.all([
-    sendMsg('getAsesor'),
+    sendMsg('getAsesorId'),
     sendMsg('fetchAdministrativos').catch(() => [])
   ]).then(([asesorResp, adminList]) => {
     const input = document.getElementById('q10-act-asesor');
