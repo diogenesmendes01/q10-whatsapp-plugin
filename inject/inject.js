@@ -147,18 +147,19 @@
 
   /**
    * Clean phone from chatId format: "5519988145438@c.us" → "5519988145438".
-   * Returns null for LID identifiers ("12345@lid") and other non-phone shapes
-   * — caller should retry via the linked contact for those.
+   * Returns null for LID identifiers ("12345@lid"), groups, and any value
+   * we can't prove is a real phone. Callers must retry via the linked
+   * contact for LID chats.
+   *
+   * Important: do NOT accept bare digits as a phone. LIDs are 14-17 numeric
+   * digits and look exactly like long phone numbers; without the @c.us
+   * suffix we can't tell them apart.
    */
   function cleanPhone(chatId) {
     if (!chatId) return null;
-    // Only @c.us / s.whatsapp.net carry actual phone numbers in the prefix.
-    var match = chatId.match(/^(\d{10,15})@(?:c\.us|s\.whatsapp\.net)$/);
-    if (match) return match[1];
-    // Last-resort: a 10-15 digit string (covers raw phone passed in).
-    var raw = String(chatId).replace(/\D/g, '');
-    if (raw.length >= 10 && raw.length <= 15) return raw;
-    return null;
+    var s = String(chatId);
+    var match = s.match(/^(\d{10,15})@(?:c\.us|s\.whatsapp\.net)$/);
+    return match ? match[1] : null;
   }
 
   // ──────────────────────────────────────────────────────────────
