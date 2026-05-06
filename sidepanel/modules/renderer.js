@@ -295,10 +295,7 @@ export function renderOportunidad(result) {
 
           return `
             <div class="q10-info-card" style="position:relative;">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
-                <div style="font-weight:600;font-size:13px;color:#111;">${negocioName}</div>
-                <button class="q10-link-btn" data-q10-action="edit-negocio" data-negocio="${negocioId}" style="font-size:11px;color:#0EA5E9;background:none;border:none;cursor:pointer;padding:2px 6px;">✎ Editar</button>
-              </div>
+              <div style="font-weight:600;font-size:13px;color:#111;margin-bottom:8px;">${negocioName}</div>
               ${programa ? `<div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(programa)}</span></div>` : ''}
               ${fecha ? `<div class="q10-info-row"><span class="q10-info-label">Fecha cierre</span><span class="q10-info-value">${fecha}</span></div>` : ''}
               ${valor ? `<div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${valor}</span></div>` : ''}

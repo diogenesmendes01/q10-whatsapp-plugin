@@ -501,30 +501,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return result;
       })());
 
-    case 'updateNegocio':
-      // Q10 documented this as POST /Negocio/Actualizar (legacy capitalized
-      // path style). Falls back to PATCH /negocios if the legacy endpoint
-      // returns 404 — covers tenants where only one of the two is wired up.
-      return handle((async () => {
-        let result;
-        try {
-          result = await apiPost('/Negocio/Actualizar', msg.body);
-        } catch (e) {
-          if (/API\s+404/i.test(e.message || '')) {
-            result = await apiPatch('/negocios', msg.body);
-          } else {
-            throw e;
-          }
-        }
-        cache.clear();
-        return result;
-      })());
-
     case 'changeNegocioEstado':
       // Move a negocio between non-terminal pipeline stages.
-      // Q10 endpoint: PATCH /negocios/estado.
+      // Q10 endpoint: PATCH /negocios/estado. Q10 requires
+      // Numero_identificacion_asesor on every state transition — auto-inject
+      // from storage so the sidepanel doesn't have to.
       return handle((async () => {
-        const result = await apiPatch('/negocios/estado', msg.body);
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        const result = await apiPatch('/negocios/estado', body);
         cache.clear();
         return result;
       })());
@@ -532,7 +520,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'ganarNegocio':
       // Mark negocio as won. Q10: PUT /negocios/estado/ganar.
       return handle((async () => {
-        const result = await apiPut('/negocios/estado/ganar', msg.body);
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        const result = await apiPut('/negocios/estado/ganar', body);
         cache.clear();
         return result;
       })());
@@ -541,32 +534,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // Mark negocio as lost. Q10: PUT /negocios/estado/perder.
       // Requires Consecutivo_causa_perdida (from /causas).
       return handle((async () => {
-        const result = await apiPut('/negocios/estado/perder', msg.body);
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        const result = await apiPut('/negocios/estado/perder', body);
         cache.clear();
         return result;
       })());
 
     case 'fetchCausas':
       return handle(apiGet('/causas', { Estado: true }));
-
-    case 'updateOportunidad':
-      // Q10 documented this as POST /New/Oportunidades/Actualizar (newer
-      // capitalized path style). Falls back to PATCH /oportunidades on 404
-      // for tenants where only the legacy route is wired up.
-      return handle((async () => {
-        let result;
-        try {
-          result = await apiPost('/New/Oportunidades/Actualizar', msg.body);
-        } catch (e) {
-          if (/API\s+404/i.test(e.message || '')) {
-            result = await apiPatch('/oportunidades', msg.body);
-          } else {
-            throw e;
-          }
-        }
-        cache.clear();
-        return result;
-      })());
 
     case 'createActividad':
       // BUG-03 fix: POST /actividades expects Consecutivo_negocio, Estado_actividad,

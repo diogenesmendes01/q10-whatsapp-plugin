@@ -766,93 +766,6 @@ function showPerderCausaModal(negocioId) {
   });
 }
 
-// ----------------------------------------------------------------
-// Editar negocio — pre-fills the same form as Crear with the current
-// values, sends PATCH /negocios on submit.
-// ----------------------------------------------------------------
-function showEditNegocioModal(negocio, oportunidadConsec) {
-  removeModal();
-  const consec = negocio.Consecutivo_negocio ?? negocio.Consecutivo;
-  const overlay = el('div', 'q10-modal-overlay');
-  overlay.innerHTML = `
-    <div class="q10-modal">
-      <div class="q10-modal-header">
-        <span class="q10-modal-title">Editar Negocio</span>
-        <button class="q10-modal-close-btn">${icon('close')}</button>
-      </div>
-      <div class="q10-modal-body">
-        <div class="q10-form-group">
-          <label class="q10-form-label">Nombre del negocio *</label>
-          <input class="q10-form-input" id="q10-edn-nombre" value="${htmlAttr(negocio.Nombre_negocio || negocio.Nombre || '')}">
-        </div>
-        <div class="q10-form-group">
-          <label class="q10-form-label">Programa</label>
-          <select class="q10-form-select" id="q10-edn-programa"><option value="">Cargando...</option></select>
-        </div>
-        <div class="q10-form-group">
-          <label class="q10-form-label">Fecha tentativa de cierre</label>
-          <input class="q10-form-input" id="q10-edn-fecha" type="date" value="${htmlAttr(negocio.Fecha_tentativa_cierre || '')}">
-        </div>
-        <div class="q10-form-group">
-          <label class="q10-form-label">Valor</label>
-          <input class="q10-form-input" id="q10-edn-valor" type="number" min="0" step="0.01" value="${htmlAttr(negocio.Valor ?? '')}">
-        </div>
-        <div class="q10-form-group">
-          <label class="q10-form-label">Observaciones</label>
-          <textarea class="q10-form-textarea" id="q10-edn-obs">${htmlText(negocio.Observaciones || '')}</textarea>
-        </div>
-      </div>
-      <div class="q10-modal-footer">
-        <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
-        <button class="q10-btn q10-btn-cta" id="q10-edn-submit">Guardar</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
-  overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
-
-  // Programa dropdown — same logic as Crear Negocio.
-  const fillProgs = (programas) => {
-    const sel = document.getElementById('q10-edn-programa');
-    if (!sel) return;
-    if (!programas?.length) { sel.innerHTML = '<option value="">— Não disponível —</option>'; return; }
-    sel.innerHTML = '<option value="">— Selecciona —</option>' + programas.map(p => {
-      const isSelected = p.Codigo === negocio.Codigo_programa;
-      return `<option value="${htmlAttr(p.Codigo)}" ${isSelected ? 'selected' : ''}>${htmlText(p.Nombre || p.Codigo)}</option>`;
-    }).join('');
-  };
-  if (catalogsCache?.programas?.length) fillProgs(catalogsCache.programas);
-  else sendMsg('fetchCatalogs').then(c => { setCatalogsCache(c); fillProgs(c?.programas || []); }).catch(() => fillProgs([]));
-
-  document.getElementById('q10-edn-submit').addEventListener('click', async () => {
-    const nombre = document.getElementById('q10-edn-nombre').value.trim();
-    const programa = document.getElementById('q10-edn-programa').value;
-    const fecha = document.getElementById('q10-edn-fecha').value;
-    const valorRaw = document.getElementById('q10-edn-valor').value;
-    const obs = document.getElementById('q10-edn-obs').value.trim();
-    if (!nombre) { showToast('Nombre es obligatorio', 'error'); return; }
-
-    const btn = document.getElementById('q10-edn-submit');
-    btn.disabled = true; btn.textContent = 'Guardando...';
-    try {
-      const reqBody = { Consecutivo_negocio: consec, Nombre_negocio: nombre };
-      if (programa) reqBody.Codigo_programa = programa;
-      if (fecha) reqBody.Fecha_tentativa_cierre = fecha;
-      if (valorRaw) reqBody.Valor = parseFloat(valorRaw);
-      if (obs) reqBody.Observaciones = obs;
-      await sendMsg('updateNegocio', { body: reqBody });
-      showToast('Negocio actualizado ✓', 'success');
-      await sendMsg('clearCache').catch(() => {});
-      removeModal();
-      if (currentPhone) searchPhone(currentPhone);
-    } catch (err) {
-      showToast(err.message || 'Error actualizando negocio', 'error');
-      btn.disabled = false; btn.textContent = 'Guardar';
-    }
-  });
-}
-
 // Modal for creating a Negocio inside an existing Oportunidad. Required
 // step before the user can register actividades — Q10 normally auto-creates
 // one with the oportunidad but some configs don't.
@@ -1255,8 +1168,6 @@ export function bindOportunidadActions(d) {
       }
     } else if (action === 'finalize-negocio') {
       showFinalizarNegocioPopover(negocioId, target);
-    } else if (action === 'edit-negocio') {
-      if (negocio) showEditNegocioModal(negocio, currentResult?.data?.Consecutivo_oportunidad ?? d.Consecutivo_oportunidad);
     }
   }, { signal: window.__q10OppAbortCtl.signal });
 }
