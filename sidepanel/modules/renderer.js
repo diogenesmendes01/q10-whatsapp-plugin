@@ -246,6 +246,10 @@ export function renderOportunidad(result) {
   // single "Finalizar" entry that opens the Ganado/Perdido picker.
   let negociosHtml = '';
   if (result.negocios && result.negocios.length > 0) {
+    if (typeof console !== 'undefined') {
+      console.log('[Q10] negocios payload:', result.negocios);
+      console.log('[Q10] flujonegocios payload:', result.flujonegocios);
+    }
     const flujo = (result.flujonegocios || [])
       .slice()
       .sort((a, b) => (a.Porcentaje || 0) - (b.Porcentaje || 0));
@@ -258,8 +262,18 @@ export function renderOportunidad(result) {
         ${result.negocios.map(n => {
           const negocioId = n.Consecutivo_negocio ?? n.Consecutivo;
           const negocioName = htmlText(n.Nombre_negocio || n.Nombre || n.Descripcion || ('Negocio ' + (negocioId ?? '')));
-          const currentEstado = n.Consecutivo_estado_negocio;
-          const currentPct = (flujo.find(s => s.Consecutivo_estado_negocio === currentEstado)?.Porcentaje) ?? 0;
+          // Q10 returns the current state id under one of several keys; try
+          // them all and coerce to Number so comparisons against the flujo
+          // entries (which are numeric) match consistently.
+          const rawCurrentEstado = n.Consecutivo_estado_negocio
+            ?? n.Consecutivo_estado
+            ?? n.Estado_negocio
+            ?? n.Codigo_estado_negocio
+            ?? n.Estado;
+          const currentEstado = rawCurrentEstado != null ? Number(rawCurrentEstado) : null;
+          const currentPct = n.Porcentaje
+            ?? (flujo.find(s => Number(s.Consecutivo_estado_negocio ?? s.Consecutivo) === currentEstado)?.Porcentaje)
+            ?? 0;
           const programa = n.Nombre_programa || n.Programa || (n.Codigo_programa || '');
           const fecha = n.Fecha_tentativa_cierre ? fmtDate(n.Fecha_tentativa_cierre) : '';
           const valor = n.Valor != null ? fmtMoney(n.Valor) : '';
@@ -267,8 +281,8 @@ export function renderOportunidad(result) {
 
           // Build step rows: non-terminals + Finalizar entry at the end.
           const steps = nonTerminal.map(s => ({
-            id: s.Consecutivo_estado_negocio,
-            name: s.Nombre_estado_negocio || s.Nombre || ('Estado ' + s.Consecutivo_estado_negocio),
+            id: Number(s.Consecutivo_estado_negocio ?? s.Consecutivo),
+            name: s.Nombre_estado_negocio || s.Nombre || ('Estado ' + (s.Consecutivo_estado_negocio ?? s.Consecutivo)),
             pct: s.Porcentaje || 0,
             type: 'state',
           }));
@@ -287,7 +301,7 @@ export function renderOportunidad(result) {
               <div class="q10-pipe-step q10-pipe-${stateClass}" ${isClickable ? `${dataAttrs} role="button" tabindex="0"` : ''} style="cursor:${isClickable ? 'pointer' : 'default'};">
                 <div class="q10-pipe-bullet"></div>
                 <div class="q10-pipe-label">${htmlText(s.name)}</div>
-                ${idx < steps.length - 1 ? `<div class="q10-pipe-line ${isPast ? 'done' : ''}"></div>` : ''}
+                ${idx < steps.length - 1 ? `<div class="q10-pipe-line ${isPast || isCurrent ? 'done' : ''}"></div>` : ''}
               </div>`;
           }).join('');
 
