@@ -153,42 +153,88 @@
   //  and pedroslopez/whatsapp-web.js PR #2816.
   // ──────────────────────────────────────────────────────────────
   function strategyCometDebug() {
+    var diag = '[Strategy 0/Comet]';
     try {
-      if (typeof global.require !== 'function') return null;
+      // Modern WA exposes `require` and `importNamespace` on either `self` or
+      // `window`. They're the same object in the main thread but reading both
+      // explicitly is cheap insurance.
+      var req = (typeof global.require === 'function') ? global.require
+              : (typeof self !== 'undefined' && typeof self.require === 'function') ? self.require
+              : null;
+      if (!req) {
+        console.log(TAG, diag, 'require() not available (typeof window.require:', typeof global.require + ')');
+        return null;
+      }
 
-      var debugMod;
-      try { debugMod = global.require('__debug'); } catch (_) { return null; }
-      if (!debugMod || !debugMod.modulesMap) return null;
+      var debugMod = null;
+      try { debugMod = req('__debug'); } catch (e) {
+        console.log(TAG, diag, 'require("__debug") threw:', e.message);
+        return null;
+      }
+      if (!debugMod) {
+        console.log(TAG, diag, '__debug returned falsy:', debugMod);
+        return null;
+      }
+      if (!debugMod.modulesMap) {
+        console.log(TAG, diag, '__debug.modulesMap missing. Keys on __debug:', Object.keys(debugMod).slice(0, 10));
+        return null;
+      }
 
-      // Sanity: the canonical post-Webpack id for the Chat collection.
-      // If WhatsApp ever renames it we'll need to adjust here.
-      if (!debugMod.modulesMap['WAWebChatCollection']) return null;
+      var allIds = Object.keys(debugMod.modulesMap);
+      console.log(TAG, diag, 'modulesMap has', allIds.length, 'modules');
+
+      // If the canonical id isn't there, dump every chat-related id we can
+      // find so the user can paste them back and we can adjust the names.
+      if (!debugMod.modulesMap['WAWebChatCollection']) {
+        var chatIsh = allIds.filter(function(k) { return /chat/i.test(k); }).slice(0, 30);
+        console.log(TAG, diag, 'WAWebChatCollection missing. Chat-related modules sample:', chatIsh);
+        return null;
+      }
+
+      var importNs = (typeof global.importNamespace === 'function') ? global.importNamespace
+                   : (typeof self !== 'undefined' && typeof self.importNamespace === 'function') ? self.importNamespace
+                   : null;
 
       function loadCollection(id, fallbackProp) {
         try {
-          var mod = typeof global.importNamespace === 'function'
-            ? global.importNamespace(id)
-            : global.require(id);
-          if (!mod) return null;
-          return mod.default || (fallbackProp && mod[fallbackProp]) || null;
-        } catch (_) { return null; }
+          var mod = importNs ? importNs(id) : req(id);
+          if (!mod) {
+            console.log(TAG, diag, 'module', id, 'returned falsy');
+            return null;
+          }
+          var col = mod.default || (fallbackProp && mod[fallbackProp]) || null;
+          if (!col) {
+            console.log(TAG, diag, 'module', id, 'loaded but no default/' + fallbackProp + '. Keys:', Object.keys(mod).slice(0, 15));
+          }
+          return col;
+        } catch (e) {
+          console.log(TAG, diag, 'load', id, 'threw:', e.message);
+          return null;
+        }
       }
 
       var ChatCol = loadCollection('WAWebChatCollection', 'ChatCollection');
-      if (!ChatCol || typeof ChatCol.get !== 'function') return null;
+      if (!ChatCol) {
+        console.log(TAG, diag, 'ChatCollection load returned null');
+        return null;
+      }
+      if (typeof ChatCol.get !== 'function') {
+        console.log(TAG, diag, 'ChatCol.get is not a function. Methods:', Object.keys(ChatCol).slice(0, 15));
+        return null;
+      }
 
       var ContactCol = loadCollection('WAWebContactCollection', 'ContactCollection');
       var MsgCol = loadCollection('WAWebMsgCollection', 'MsgCollection');
 
-      console.log(TAG, 'Strategy 0 (Comet __debug): ChatCollection found, Contact:', !!ContactCol, 'Msg:', !!MsgCol);
+      console.log(TAG, diag, 'ChatCollection found, Contact:', !!ContactCol, 'Msg:', !!MsgCol);
       return {
         Chat:    ChatCol,
         Contact: ContactCol,
         Msg:     MsgCol,
-        Conn:    null  // Conn is in a different module on Comet; not needed for batch extraction
+        Conn:    null
       };
     } catch (err) {
-      console.warn(TAG, 'Strategy 0 (Comet) error:', err.message);
+      console.warn(TAG, diag, 'unexpected error:', err.message);
     }
     return null;
   }
@@ -356,10 +402,13 @@
   //  Public API — Safe wrappers with error tracking
   // ──────────────────────────────────────────────────────────────
 
+  var _retryCount = 0;
   function isAvailable() {
     if (broken) return false;
     if (storeRef && storeRef !== 'broken') return true;
     // Lazy retry — modules may have loaded since the boot-time attempt.
+    _retryCount++;
+    console.log(TAG, 'Lazy retry #' + _retryCount + ' — re-attempting Store resolution');
     return resolveStore();
   }
 
