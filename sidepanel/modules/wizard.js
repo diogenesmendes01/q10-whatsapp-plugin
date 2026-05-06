@@ -13,6 +13,11 @@ import {
 } from './state.js';
 import { body, hideActions, showActions } from './renderer.js';
 
+// Lazy alias: handlers.js imports from this module (circular dep), so resolve
+// showToast through the live namespace binding at call time, not via static
+// destructuring (which could capture undefined depending on eval order).
+const showToast = (...a) => handlers.showToast(...a);
+
 export const WIZARD_STEPS = [
   { id: 'contacto',    label: 'Contacto',    icon: 'user' },
   { id: 'estudiante',  label: 'Estudiante',  icon: 'userPlus' },
@@ -67,8 +72,8 @@ export function renderWizardStep() {
         <div class="q10-wizard-step-header">
           ${icon('user','q10-wizard-step-icon')}
           <div>
-            <div class="q10-wizard-step-title">Paso 1: Crear Contacto</div>
-            <div class="q10-wizard-step-desc">Registre los datos básicos del nuevo contacto</div>
+            <div class="q10-wizard-step-title">Paso 1: Crear Lead</div>
+            <div class="q10-wizard-step-desc">Registramos la oportunidad y el contacto del prospecto en Q10</div>
           </div>
         </div>
         <div class="q10-form-group"><label class="q10-form-label">Primer Nombre *</label><input class="q10-form-input" id="wz-fname" value="${htmlAttr(pf.Primer_nombre)}" placeholder="Nombre"></div>
@@ -289,8 +294,44 @@ export async function submitWizardStep() {
         const wzDetalle = [];
         if (wzEmail) wzDetalle.push({ Tipo_detalle: 'Email', Descripcion: wzEmail });
         if (wzCelularQ10) wzDetalle.push({ Tipo_detalle: 'Celular', Descripcion: wzCelularQ10 });
+        const fullName = [fname, fname2, lname, lname2].filter(Boolean).join(' ');
+
+        // Q10 forces every contacto to belong to an oportunidad
+        // (POST /contactos with Consecutivo_oportunidad=0 returns 404, omitted returns 400).
+        // Reuse one if the wizard was started from an existing oportunidad row,
+        // or if a prior attempt on this step already created one (avoid duplicates on retry).
+        let consecOportunidad = res.oportunidad?.Consecutivo_oportunidad
+          ?? res.oportunidad?.Consecutivo
+          ?? wizardState.prefill?.Consecutivo_oportunidad
+          ?? wizardState.prefill?.Consecutivo;
+
+        if (!consecOportunidad) {
+          const oppPayload = {
+            Nombre_oportunidad: fullName,
+            Numero_identificacion_oportunidad: wzDocnum,
+          };
+          if (wzCelularQ10) oppPayload.Celular = wzCelularQ10;
+          if (wzEmail) oppPayload.Correo_electronico = wzEmail;
+
+          let oppResult;
+          try {
+            oppResult = await sendMsg('createOportunidad', { body: oppPayload });
+          } catch (e) {
+            const msg = e.message || '';
+            if (/no se encuentra registrado un asesor/i.test(msg)) {
+              throw new Error('El asesor configurado en las Opciones no está registrado como asesor en Q10. Vaya a Q10 → Mercadeo → Asesores y regístrelo, o cambie el asesor en las Opciones de la extensión.');
+            }
+            throw e;
+          }
+          res.oportunidad = oppResult;
+          consecOportunidad = oppResult.Consecutivo_oportunidad ?? oppResult.Consecutivo;
+          if (!consecOportunidad) {
+            throw new Error('La API no devolvió un Consecutivo de oportunidad. No es posible continuar.');
+          }
+        }
+
         const payload = {
-          Consecutivo_oportunidad: 0,
+          Consecutivo_oportunidad: consecOportunidad,
           Nombres: [fname, fname2].filter(Boolean).join(' '),
           Apellidos: [lname, lname2].filter(Boolean).join(' '),
           Detalle: wzDetalle,
@@ -307,7 +348,7 @@ export async function submitWizardStep() {
           Celular: wzCelularQ10,
           Numero_identificacion: wzDocnum,
         };
-        showToast('Contacto creado ✓', 'success');
+        showToast('Lead creado ✓', 'success');
         break;
       }
       case 1: {
