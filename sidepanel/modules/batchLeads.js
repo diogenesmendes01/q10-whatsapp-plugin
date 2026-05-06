@@ -31,6 +31,14 @@ export function renderBatchLeads() {
   body.innerHTML = `
     <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
 
+      <!-- BACK -->
+      <button id="bl-back-btn"
+        style="align-self:flex-start;display:flex;align-items:center;gap:6px;
+               padding:6px 10px;background:#F3F4F6;color:#374151;border:1px solid #D1D5DB;
+               border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;">
+        &#8592; Voltar
+      </button>
+
       <!-- SECTION 1: Extract -->
       <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
         <div style="font-weight:600;font-size:13px;color:#0369A1;margin-bottom:10px;">
@@ -172,6 +180,14 @@ function bindBatchLeadsEvents() {
   document.getElementById('bl-csv-btn').addEventListener('click', downloadCSV);
   document.getElementById('bl-csv-input').addEventListener('change', onCSVFileSelected);
   document.getElementById('bl-import-btn').addEventListener('click', startImport);
+  document.getElementById('bl-back-btn').addEventListener('click', () => {
+    // Stop any in-progress extraction so it doesn't keep firing progress
+    // updates after the user navigates away.
+    if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+    chrome.runtime.sendMessage({ action: 'batchExtractStop' }, () => void chrome.runtime.lastError);
+    if (window._restoreView) window._restoreView();
+    else if (window._renderNoConversation) window._renderNoConversation();
+  });
 
   _startProgressPolling();
 }

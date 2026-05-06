@@ -348,32 +348,70 @@
   // loop, still asleep in setTimeout, would resume and run alongside the new one.
   let batchGen = 0;
 
+  function findChatListPane() {
+    // WhatsApp Web rotates DOM structure across versions; try the stable
+    // selectors in order of preference. Fallback to a heuristic scan that
+    // looks for the largest scrollable element on the left half of the page.
+    return document.querySelector('#pane-side')
+        || document.querySelector('[aria-label="Chat list"]')
+        || document.querySelector('[aria-label="Lista de conversas"]')
+        || document.querySelector('[aria-label="Lista de chats"]')
+        || document.querySelector('div[role="grid"]')
+        || null;
+  }
+
   function extractVisibleChatContacts() {
     const contacts = new Map();
-    // WhatsApp Web stores each chat in a list item with data-id="PHONE@c.us"
-    const pane = document.querySelector('#pane-side');
+    const pane = findChatListPane();
     if (!pane) return contacts;
 
-    const items = pane.querySelectorAll('[data-id]');
-    items.forEach(item => {
-      const dataId = item.getAttribute('data-id') || '';
-      // Skip groups and broadcasts
-      if (!dataId.includes('@c.us')) return;
-      const phoneMatch = dataId.match(/(\d{10,15})@c\.us/);
-      if (!phoneMatch) return;
-      const phone = phoneMatch[1];
+    // Modern WA Web (2024+) uses [role="listitem"] for chat rows; older
+    // versions exposed [data-id="PHONE@c.us"] directly. Try both, plus a
+    // catch-all that walks every descendant looking for an @c.us attribute.
+    const itemSets = [
+      pane.querySelectorAll('[data-id]'),
+      pane.querySelectorAll('[role="listitem"]'),
+      pane.querySelectorAll('[role="row"]'),
+    ];
 
-      // Try multiple selectors for the contact name
-      const nameEl =
-        item.querySelector('[data-testid="cell-frame-title"] span') ||
-        item.querySelector('span[dir="auto"]') ||
-        item.querySelector('span[title]');
-      const rawName = (nameEl?.textContent || nameEl?.getAttribute('title') || '').trim();
-      // If the "name" is just digits it's actually the phone number — store empty
-      const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
+    const seenItems = new Set();
+    for (const items of itemSets) {
+      items.forEach(item => {
+        if (seenItems.has(item)) return;
+        seenItems.add(item);
 
-      contacts.set(phone, { phone, name });
-    });
+        // Phone discovery: check the item itself and every descendant for
+        // any attribute containing "PHONE@c.us" — handles the case where
+        // WA moved the data-id one level down.
+        let phone = null;
+        const own = item.getAttribute?.('data-id') || '';
+        let m = own.match(/(\d{10,15})@c\.us/);
+        if (m) {
+          phone = m[1];
+        } else {
+          const dataIdChild = item.querySelector('[data-id*="@c.us"]');
+          if (dataIdChild) {
+            m = (dataIdChild.getAttribute('data-id') || '').match(/(\d{10,15})@c\.us/);
+            if (m) phone = m[1];
+          }
+        }
+        // Skip groups (@g.us) and rows that don't carry a phone.
+        if (!phone) return;
+
+        // Name: try several selectors, preferring the cell-frame-title
+        // structure but falling back to any visible span with a title or
+        // dir attribute.
+        const nameEl =
+          item.querySelector('[data-testid="cell-frame-title"] span') ||
+          item.querySelector('[title]:not([title=""])') ||
+          item.querySelector('span[dir="auto"]') ||
+          item.querySelector('span[title]');
+        const rawName = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
+        const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
+
+        if (!contacts.has(phone)) contacts.set(phone, { phone, name });
+      });
+    }
     return contacts;
   }
 
@@ -381,10 +419,12 @@
     const myGen = ++batchGen;
     batchExtracting = true;
     const allContacts = new Map();
-    const pane = document.querySelector('#pane-side');
+    const pane = findChatListPane();
+
+    log('[batch] starting extraction. pane found:', !!pane, 'cutoffMs:', cutoffMs);
 
     if (!pane) {
-      chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: false, error: 'Painel de conversas não encontrado. Abra o WhatsApp Web.' });
+      chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: false, error: 'Painel de conversas não encontrado. Abra a aba do WhatsApp Web e certifique-se de que a lista de conversas está visível.' });
       return;
     }
 
@@ -435,6 +475,16 @@
 
     batchExtracting = false;
     const result = Array.from(allContacts.values());
+    log('[batch] extraction finished. contacts:', result.length);
+
+    if (result.length === 0) {
+      chrome.runtime.sendMessage({
+        action: 'batchExtractComplete',
+        ok: false,
+        error: 'Nenhuma conversa individual encontrada. Verifique se há chats com contatos pessoais (não grupos) na lista do WhatsApp Web e que ela esteja visível no painel lateral.'
+      });
+      return;
+    }
     chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: true, data: result });
   }
 
