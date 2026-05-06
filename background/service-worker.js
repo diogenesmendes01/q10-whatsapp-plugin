@@ -550,9 +550,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return handle(apiGet('/causas', { Estado: true }));
 
     case 'updateOportunidad':
-      // PATCH /oportunidades — used by "Editar oportunidad" flow.
+      // Q10 documented this as POST /New/Oportunidades/Actualizar (newer
+      // capitalized path style). Falls back to PATCH /oportunidades on 404
+      // for tenants where only the legacy route is wired up.
       return handle((async () => {
-        const result = await apiPatch('/oportunidades', msg.body);
+        let result;
+        try {
+          result = await apiPost('/New/Oportunidades/Actualizar', msg.body);
+        } catch (e) {
+          if (/API\s+404/i.test(e.message || '')) {
+            result = await apiPatch('/oportunidades', msg.body);
+          } else {
+            throw e;
+          }
+        }
         cache.clear();
         return result;
       })());
