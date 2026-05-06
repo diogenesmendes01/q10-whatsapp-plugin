@@ -421,19 +421,39 @@
 
                 if (!phone) { skippedNoPhone++; continue; }
 
-                var name = c.name
-                  || c.formattedTitle
-                  || (c.contact && (c.contact.pushname || c.contact.formattedName || c.contact.name || c.contact.shortName))
-                  || null;
+                // Pick the best display name. Saved-contact names take priority
+                // (those come from the user's address book), but for unsaved
+                // contacts WhatsApp falls back to the formatted phone number
+                // for `c.name` / `c.formattedTitle` — in that case we'd rather
+                // use the pushname (the profile name the contact set on their
+                // own WhatsApp account).
+                function notDigitsOnly(s) {
+                  if (!s) return false;
+                  return !/^[\d\s\+\-\(\)‎‏]+$/.test(String(s));
+                }
+                var savedCandidates = [
+                  c.name,
+                  c.formattedTitle,
+                  c.contact && c.contact.formattedName,
+                  c.contact && c.contact.name
+                ];
+                var name = '';
+                for (var k = 0; k < savedCandidates.length; k++) {
+                  if (notDigitsOnly(savedCandidates[k])) { name = String(savedCandidates[k]); break; }
+                }
+                if (!name && c.contact) {
+                  if (notDigitsOnly(c.contact.pushname)) name = String(c.contact.pushname);
+                  else if (notDigitsOnly(c.contact.shortName)) name = String(c.contact.shortName);
+                }
                 if (!name) {
                   try {
                     var contact = adapter.getContactById(c.id);
                     if (contact) {
-                      name = contact.pushname || contact.formattedName || contact.name || contact.shortName || null;
+                      var fromAdapter = contact.formattedName || contact.name || contact.pushname || contact.shortName;
+                      if (notDigitsOnly(fromAdapter)) name = String(fromAdapter);
                     }
                   } catch (_) { /* skip */ }
                 }
-                if (name && /^[\d\s\+\-\(\)]+$/.test(String(name))) name = '';
 
                 var ts = (typeof c.t === 'number' ? c.t : (c.lastReceivedKey && c.lastReceivedKey.t) || 0) | 0;
                 out.push({ phone: phone, name: name || '', lastMsgTimestamp: ts });

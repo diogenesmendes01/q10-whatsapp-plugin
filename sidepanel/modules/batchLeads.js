@@ -99,7 +99,7 @@ export function renderBatchLeads() {
           2. Importar CSV para Q10
         </div>
         <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px;">
-          Colunas esperadas: <code>telefone,nome</code> &nbsp;·&nbsp; Máx. 5 MB
+          Colunas esperadas: <code>telefone;nome</code> (ou <code>,</code>) &nbsp;·&nbsp; Máx. 5 MB
         </div>
         <label style="display:block;border:1.5px dashed #D1D5DB;border-radius:8px;padding:12px;
                       text-align:center;cursor:pointer;font-size:12px;color:#6B7280;">
@@ -296,10 +296,13 @@ function _startProgressPolling() {
 // ================================================================
 function downloadCSV() {
   if (!_extractedContacts.length) return;
-  const csvField = v => `"${(v || '').replace(/"/g, '""')}"`;
-  const rows = [['telefone', 'nome']];
-  _extractedContacts.forEach(c => rows.push([c.phone, csvField(c.name)]));
-  const csv = rows.map(r => r.join(',')).join('\n');
+  // Semicolon-separated (Brazil/EU Excel default). Every field is quoted so
+  // names containing ; or " round-trip correctly.
+  const SEP = ';';
+  const csvField = v => `"${String(v || '').replace(/"/g, '""')}"`;
+  const rows = [['telefone', 'nome'].map(csvField)];
+  _extractedContacts.forEach(c => rows.push([csvField(c.phone), csvField(c.name)]));
+  const csv = rows.map(r => r.join(SEP)).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -316,7 +319,7 @@ function _escHtml(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function _parseCSVLine(line) {
+function _parseCSVLine(line, sep) {
   const fields = [];
   let i = 0;
   while (i < line.length) {
@@ -329,9 +332,9 @@ function _parseCSVLine(line) {
         else { val += line[i++]; }
       }
       fields.push(val);
-      if (line[i] === ',') i++;
+      if (line[i] === sep) i++;
     } else {
-      const end = line.indexOf(',', i);
+      const end = line.indexOf(sep, i);
       if (end === -1) { fields.push(line.slice(i)); break; }
       fields.push(line.slice(i, end));
       i = end + 1;
@@ -340,18 +343,30 @@ function _parseCSVLine(line) {
   return fields;
 }
 
+// Pick the separator by counting which character appears more in the header.
+// We export `;` by default but legacy files and Excel exports may use `,`,
+// so accept both transparently.
+function _detectSeparator(headerLine) {
+  const semi = (headerLine.match(/;/g) || []).length;
+  const comma = (headerLine.match(/,/g) || []).length;
+  return semi >= comma ? ';' : ',';
+}
+
 // ================================================================
 //  CSV IMPORT
 // ================================================================
 function parseCSV(text) {
+  // Strip BOM if present (Excel adds one).
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
   const firstLine = lines[0].toLowerCase();
+  const sep = _detectSeparator(lines[0]);
   const startIdx = (firstLine.includes('telefone') || firstLine.includes('phone')) ? 1 : 0;
 
   const seen = new Set();
   return lines.slice(startIdx).map(line => {
-    const fields = _parseCSVLine(line);
+    const fields = _parseCSVLine(line, sep);
     const phone = (fields[0] || '').trim().replace(/\D/g, '');
     const name = (fields[1] || '').trim();
     return { phone, name };
@@ -389,7 +404,7 @@ function onCSVFileSelected(e) {
   reader.onload = ev => {
     _importContacts = parseCSV(ev.target.result);
     if (!_importContacts.length) {
-      _showCSVError('Nenhum contato válido encontrado. Verifique o formato: telefone,nome');
+      _showCSVError('Nenhum contato válido encontrado. Verifique o formato: telefone;nome (ou separado por vírgula)');
       return;
     }
     showImportPreview();
