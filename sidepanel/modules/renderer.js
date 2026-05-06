@@ -306,7 +306,7 @@ export function renderOportunidad(result) {
               : `data-q10-action="finalize-negocio" data-negocio="${negocioId}"`;
             const isClickable = !isClosed && !isCurrent;
             return `
-              <div class="q10-pipe-step q10-pipe-${stateClass}" ${isClickable ? `${dataAttrs} role="button" tabindex="0"` : ''} style="cursor:${isClickable ? 'pointer' : 'default'};">
+              <div class="q10-pipe-step ${stateClass}" ${isClickable ? `${dataAttrs} role="button" tabindex="0"` : ''} style="cursor:${isClickable ? 'pointer' : 'default'};">
                 <div class="q10-pipe-bullet"></div>
                 <div class="q10-pipe-label">${htmlText(s.name)}</div>
                 ${idx < steps.length - 1 ? `<div class="q10-pipe-line ${isPast || isCurrent ? 'done' : ''}"></div>` : ''}
@@ -332,12 +332,28 @@ export function renderOportunidad(result) {
 
   let actividadesHtml = '';
   if (result.actividades && result.actividades.length > 0) {
+    if (typeof console !== 'undefined') console.log('[Q10] actividades payload:', result.actividades);
     const now = Date.now();
+
+    // Q10 may return the state under different keys / values depending on
+    // the endpoint. Treat it as Programada if any signal points that way:
+    // raw 'P', "Programada"/"programada" string, or future Fecha_actividad.
+    function detectProgramada(a) {
+      const raw = String(a.Estado_actividad || a.Estado || a.Estado_act || '').trim();
+      if (raw === 'P' || /^prog/i.test(raw)) return true;
+      if (raw === 'C' || /^compl/i.test(raw)) return false;
+      // Fallback: completed activities never have Descripcion_actividad
+      // populated, only Resultado_actividad. If we see a description and
+      // no result, it's a Programada awaiting completion.
+      if ((a.Descripcion_actividad || a.Descripcion) && !(a.Resultado_actividad || a.Resultado)) return true;
+      return false;
+    }
+
     // Sort: pending programadas first (soonest first), then completed
     // (newest first). Helps the asesor see what's due next at a glance.
     const sorted = result.actividades.slice().sort((a, b) => {
-      const aProgr = (a.Estado_actividad === 'P');
-      const bProgr = (b.Estado_actividad === 'P');
+      const aProgr = detectProgramada(a);
+      const bProgr = detectProgramada(b);
       if (aProgr !== bProgr) return aProgr ? -1 : 1;
       const aDate = new Date(a.Fecha_actividad || a.Fecha || 0).getTime();
       const bDate = new Date(b.Fecha_actividad || b.Fecha || 0).getTime();
@@ -349,7 +365,7 @@ export function renderOportunidad(result) {
         <div class="q10-section-title">${icon('activity','q10-section-icon')} Actividades Recientes</div>
         ${sorted.map(a => {
           const tipo = a.Tipo_actividad || a.Tipo || 'Actividad';
-          const isProgramada = a.Estado_actividad === 'P';
+          const isProgramada = detectProgramada(a);
           const fechaRaw = a.Fecha_actividad || a.Fecha;
           const fechaMs = fechaRaw ? new Date(fechaRaw).getTime() : 0;
           const isOverdue = isProgramada && fechaMs && fechaMs < now;
