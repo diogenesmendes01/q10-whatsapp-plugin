@@ -13,7 +13,7 @@ import {
 } from './renderer.js';
 import {
   icon, htmlText, htmlAttr, fullNameHtml, fullName, fmtMoney,
-  el, escHtml
+  el, escHtml, normalizeWizardPrefill
 } from './helpers.js';
 import {
   currentPhone, currentContactName, currentResult, wizardState, catalogsCache,
@@ -838,7 +838,11 @@ export async function startEnrollmentWizard(phone, existingData) {
   setWizardState({
     step: 0,
     phone: phone || currentPhone,
-    prefill: existingData || {},
+    // Callers may pass a plain WhatsApp-detected name string, a Q10 contacto
+    // ({ Nombres, Apellidos }), or an already-canonical estudiante record.
+    // The wizard form reads pf.Primer_nombre/Primer_apellido/etc., so coerce
+    // every shape into that schema here instead of teaching every call site.
+    prefill: normalizeWizardPrefill(existingData),
     results: {}
   });
 

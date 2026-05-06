@@ -60,6 +60,44 @@ export function fullNameHtml(d) {
   return htmlText(fullName(d));
 }
 
+// Split a free-form full name into Q10's four-field shape using a simple
+// Hispanic/Brazilian heuristic. The user can always tweak the form fields
+// after, so we optimize for "good enough" not "always correct".
+//   1 token  → Primer_nombre
+//   2 tokens → Primer_nombre + Primer_apellido
+//   3 tokens → Primer_nombre + Primer_apellido + Segundo_apellido (Hispanic)
+//   4+       → Primer_nombre + Segundo_nombre + Primer_apellido + (rest as Segundo_apellido)
+export function parseFullName(str) {
+  const parts = String(str || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { Primer_nombre: parts[0] };
+  if (parts.length === 2) return { Primer_nombre: parts[0], Primer_apellido: parts[1] };
+  if (parts.length === 3) {
+    return { Primer_nombre: parts[0], Primer_apellido: parts[1], Segundo_apellido: parts[2] };
+  }
+  return {
+    Primer_nombre: parts[0],
+    Segundo_nombre: parts[1],
+    Primer_apellido: parts[2],
+    Segundo_apellido: parts.slice(3).join(' '),
+  };
+}
+
+// Coerce wizard prefill into the canonical { Primer_nombre, Segundo_nombre,
+// Primer_apellido, Segundo_apellido, Numero_identificacion, Email, Celular }
+// shape the wizard form expects. Accepts a plain string (WhatsApp-detected
+// name), a Q10 contacto/oportunidad ({ Nombres, Apellidos, ... }), or an
+// estudiante record (already canonical) — and merges so existing canonical
+// fields win over derived ones.
+export function normalizeWizardPrefill(input) {
+  if (!input) return {};
+  if (typeof input === 'string') return parseFullName(input);
+  if (input.Primer_nombre || input.Primer_apellido) return { ...input };
+  const fullStr = [input.Nombres, input.Apellidos].filter(Boolean).join(' ').trim();
+  if (!fullStr) return { ...input };
+  return { ...input, ...parseFullName(fullStr) };
+}
+
 export function fmtMoney(v) {
   return escHtml('$ ' + Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 0 }));
 }

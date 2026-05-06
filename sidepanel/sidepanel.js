@@ -53,10 +53,18 @@
     const _wizardState = window._wizardState;
     if (_wizardState) return; // Don't interrupt wizard
 
+    // state.js exports `let` bindings that only update via their setters.
+    // Plain `window._currentContactName = X` mutates a window prop and leaves
+    // the imported binding inside handlers.js still pointing at the old value
+    // (null), so the WhatsApp-detected name never reached renderResult or the
+    // Crear Oportunidad / wizard prefill paths. Always go through the setters.
+    const setPhone = window._setCurrentPhone || (v => { window._currentPhone = v; });
+    const setName = window._setCurrentContactName || (v => { window._currentContactName = v; });
+
     if (changes.currentPhone) {
       const newPhone = changes.currentPhone.newValue;
       if (changes.currentContactName?.newValue) {
-        window._currentContactName = changes.currentContactName.newValue;
+        setName(changes.currentContactName.newValue);
       }
       if (newPhone && newPhone !== window._currentPhone) {
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
@@ -67,7 +75,7 @@
           }
         });
       } else if (!newPhone && !changes.currentContactName) {
-        window._currentPhone = null;
+        setPhone(null);
         window._renderNoConversation();
       }
     }
@@ -75,8 +83,8 @@
     if (changes.currentContactName) {
       const newName = changes.currentContactName.newValue;
       const phoneFromChange = changes.currentPhone?.newValue || null;
-      if (phoneFromChange) window._currentPhone = phoneFromChange;
-      window._currentContactName = newName;
+      if (phoneFromChange) setPhone(phoneFromChange);
+      setName(newName);
       if (newName) {
         chrome.runtime.sendMessage({ action: 'checkApiKey' }, (resp) => {
           if (resp && resp.ok && resp.data?.configured) {
