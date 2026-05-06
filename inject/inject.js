@@ -167,24 +167,35 @@
 
   function getChatIdFromDOM() {
     try {
-      // Modern message ids: "false_PHONE@c.us_MSGID" or "false_LID@lid_MSGID";
-      // older ones can use @s.whatsapp.net or @broadcast. Match all of them.
-      var msgIdRegex = /(?:true|false)_([\w\.\-]+@(?:c\.us|lid|g\.us|s\.whatsapp\.net|broadcast))/;
       var attrIdRegex = /([\w\.\-]+@(?:c\.us|lid|g\.us|s\.whatsapp\.net))/;
 
-      var msgEl = document.querySelector('#main [data-id]');
-      if (msgEl) {
-        var dataId = msgEl.getAttribute('data-id') || '';
-        var match = dataId.match(msgIdRegex);
-        if (match) return match[1];
+      // Scan EVERY [data-id] inside #main; modern WA buries the chat id
+      // several levels deep and may render multiple message rows with
+      // distinct ids. The first hit that matches our pattern wins.
+      var nodes = document.querySelectorAll('#main [data-id]');
+      for (var i = 0; i < nodes.length; i++) {
+        var dataId = nodes[i].getAttribute('data-id') || '';
+        var m = dataId.match(attrIdRegex);
+        if (m) return m[1];
       }
 
-      var panel = document.querySelector('[data-testid="conversation-panel-wrapper"]');
+      // Conversation panel attributes (older WA builds tucked it here).
+      var panel = document.querySelector('[data-testid="conversation-panel-wrapper"], [data-testid="conversation-info-header"]');
       if (panel) {
         var attrs = Array.from(panel.attributes);
-        for (var i = 0; i < attrs.length; i++) {
-          var m = attrs[i].value.match(attrIdRegex);
-          if (m) return m[1];
+        for (var j = 0; j < attrs.length; j++) {
+          var pm = attrs[j].value.match(attrIdRegex);
+          if (pm) return pm[1];
+        }
+      }
+
+      // Header bar — sometimes carries the chat id as data-id on a child.
+      var headerScope = document.querySelectorAll('#main header [data-id], #main header [data-jid], #main [data-jid]');
+      for (var k = 0; k < headerScope.length; k++) {
+        var attrs2 = Array.from(headerScope[k].attributes);
+        for (var l = 0; l < attrs2.length; l++) {
+          var hm = attrs2[l].value.match(attrIdRegex);
+          if (hm) return hm[1];
         }
       }
 
@@ -243,12 +254,31 @@
   function getCurrentChat() {
     var data = null;
 
-    if (storeAvailable) {
+    // Re-check adapter availability each call. The store-adapter does lazy
+    // module resolution, so a chat opened seconds after page load may
+    // succeed even if init() ran before the WA Comet runtime was ready.
+    var adapter = window.Q10StoreAdapter;
+    if (adapter && adapter.isAvailable()) {
+      storeAvailable = true;
       data = getCurrentChatFromStore();
     }
 
     if (!data) {
       data = getCurrentChatFromDOM();
+    }
+
+    // If we got a chat shape but no phone, try one last time via the
+    // adapter using the chatId we just discovered. Covers the race where
+    // the DOM has the @lid but the store-via-active-chat didn't expose
+    // a contact link yet.
+    if (data && !data.phone && data.chatId && adapter && adapter.isAvailable()) {
+      try {
+        var chat = adapter.getChatById(data.chatId);
+        if (chat && chat.contact && chat.contact.id) {
+          var resolved = cleanPhone(chat.contact.id._serialized || chat.contact.id.toString());
+          if (resolved) data.phone = resolved;
+        }
+      } catch (_) { /* skip */ }
     }
 
     return data;
