@@ -332,63 +332,132 @@ export function showGenerarCobroModal(studentData) {
   });
 }
 
+// Page-based replacement for the previous modal. Renders into the main body
+// like the matriculation wizard, which gives the WhatsApp lidPnCache time
+// to populate while we async-fetch medios + asesor — fixing the case where
+// the LID→phone mapping wasn't ready at click-time and the modal opened
+// with phone empty.
 export function showCreateOportunidadModal(phone, detectedName = null, contactData = null) {
-  removeModal();
-  const prefillName = detectedName || (contactData ? [contactData.Nombres || contactData.Primer_nombre, contactData.Apellidos || contactData.Primer_apellido].filter(Boolean).join(' ') : '');
+  removeModal(); // close any leftover modal from older flows
 
-  // Phone priority: Q10's stored phone first (it's authoritative), then the
-  // WA-detected phone, then any nested Detalle entry. We also accept the
-  // structured Detalle[] array in case top-level Celular is missing.
-  const detalleCelular = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Celular')?.Descripcion;
-  const prefillPhone = String(
-    contactData?.Celular ||
-    contactData?.Telefono ||
-    detalleCelular ||
-    phone ||
-    ''
-  ).replace(/\D/g, '');
+  body().innerHTML = `
+    <div class="q10-state">
+      <div class="q10-spinner"></div>
+      <div class="q10-state-title">Cargando datos...</div>
+    </div>
+  `;
+  hideActions();
 
-  const detalleEmail = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Email')?.Descripcion;
-  const prefillEmail = contactData?.Email || contactData?.Correo_electronico || detalleEmail || '';
+  // Wait for medios + asesor in parallel. The await also gives WA's
+  // lidPnCache 200-600ms to settle, which is usually enough to resolve
+  // the chat's phone if it just got opened.
+  Promise.all([
+    sendMsg('fetchMedios').catch(() => ({ mediospublicitarios: [], medioscontacto: [] })),
+    sendMsg('getAsesor').catch(() => ({ asesorId: null })),
+    sendMsg('fetchAdministrativos').catch(() => ({ data: [] })),
+  ]).then(([mediosData, asesorResp, adminResp]) => {
+    // Re-derive phone now that resolution had time to happen.
+    const detalleCelular = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Celular')?.Descripcion;
+    const prefillPhone = String(
+      contactData?.Celular ||
+      contactData?.Telefono ||
+      detalleCelular ||
+      currentPhone ||
+      phone ||
+      ''
+    ).replace(/\D/g, '');
 
-  const overlay = el('div', 'q10-modal-overlay');
-  overlay.innerHTML = `
-    <div class="q10-modal q10-modal-wide">
-      <div class="q10-modal-header">
-        <span class="q10-modal-title">Registrar Lead / Oportunidad</span>
-        <button class="q10-modal-close-btn">${icon('close')}</button>
+    const detalleEmail = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Email')?.Descripcion;
+    const prefillEmail = contactData?.Email || contactData?.Correo_electronico || detalleEmail || '';
+
+    const prefillName = detectedName || (contactData
+      ? [contactData.Nombres || contactData.Primer_nombre, contactData.Apellidos || contactData.Primer_apellido].filter(Boolean).join(' ')
+      : (currentContactName || ''));
+
+    const optHtml = (id, name) => `<option value="${htmlAttr(id)}">${htmlText(name)}</option>`;
+    const mediosPub = (mediosData.mediospublicitarios || []).map(m => {
+      const id = m.Consecutivo_medio_publicitario ?? m.Consecutivo;
+      const name = m.Nombre_medio_publicitario || m.Nombre || m.Descripcion || id;
+      return optHtml(id, name);
+    }).join('');
+    const mediosCtc = (mediosData.medioscontacto || []).map(m => {
+      const id = m.Consecutivo_medio_contacto ?? m.Consecutivo;
+      const name = m.Nombre_medio_contacto || m.Nombre || m.Descripcion || id;
+      return optHtml(id, name);
+    }).join('');
+
+    let asesorLabel = 'Carregando...';
+    let asesorWarning = false;
+    const asesorId = asesorResp?.asesorId;
+    if (!asesorId) {
+      asesorLabel = '⚠️ No configurado — abre las Opciones de la extensión';
+      asesorWarning = true;
+    } else {
+      const list = Array.isArray(adminResp) ? adminResp : (adminResp?.data || []);
+      const match = list.find(a => a.Numero_identificacion === asesorId);
+      const fullName = match
+        ? [match.Primer_nombre, match.Segundo_nombre, match.Primer_apellido, match.Segundo_apellido].filter(Boolean).join(' ').trim()
+        : '';
+      asesorLabel = fullName ? `${fullName} (${asesorId})` : asesorId;
+    }
+
+    body().innerHTML = `
+      <div style="padding:14px 16px 8px;">
+        <button id="q10-op-back" class="q10-btn q10-btn-outline" style="display:flex;align-items:center;gap:6px;font-size:12px;padding:6px 10px;">
+          ${icon('arrowLeft','q10-btn-icon')} Voltar
+        </button>
       </div>
-      <div class="q10-modal-body">
+      <div class="q10-wizard-form" style="padding:0 16px 16px;">
+        <div class="q10-wizard-step-header">
+          ${icon('briefcase','q10-wizard-step-icon')}
+          <div>
+            <div class="q10-wizard-step-title">Registrar Lead / Oportunidad</div>
+            <div class="q10-wizard-step-desc">Datos del prospecto que vamos a crear en el CRM Q10</div>
+          </div>
+        </div>
+
         <div class="q10-form-group">
           <label class="q10-form-label">Identificación *</label>
           <input class="q10-form-input" id="q10-op-ident" value="${htmlAttr(prefillName)}" placeholder="Nome do lead (ex.: João Silva)">
           <p style="font-size:11px;color:#6B7280;margin:4px 0 0">Aceita nome ou documento. Vai virar o título da oportunidade no Q10.</p>
         </div>
+
         <div class="q10-form-row">
           <div class="q10-form-group"><label class="q10-form-label">Correo electrónico</label><input class="q10-form-input" id="q10-op-email" type="email" value="${htmlAttr(prefillEmail)}" placeholder="email@ejemplo.com"></div>
           <div class="q10-form-group"><label class="q10-form-label">Celular</label><input class="q10-form-input" id="q10-op-phone" value="${htmlAttr(prefillPhone)}" placeholder="${htmlAttr(prefillPhone || '50686906161')}"></div>
         </div>
+
         <div class="q10-form-row">
           <div class="q10-form-group"><label class="q10-form-label">Teléfono</label><input class="q10-form-input" id="q10-op-tel" placeholder="Telefone fixo (opcional)"></div>
           <div class="q10-form-group"><label class="q10-form-label">Dirección</label><input class="q10-form-input" id="q10-op-addr" placeholder="Endereço (opcional)"></div>
         </div>
+
         <div class="q10-form-row">
           <div class="q10-form-group"><label class="q10-form-label">Municipio</label><input class="q10-form-input" id="q10-op-muni" placeholder="Município (opcional)"></div>
           <div class="q10-form-group"><label class="q10-form-label">Distrito</label><input class="q10-form-input" id="q10-op-dist" placeholder="Distrito (opcional)"></div>
         </div>
+
         <div class="q10-form-group">
           <label class="q10-form-label">Asesor</label>
-          <input class="q10-form-input" id="q10-op-asesor" disabled value="Carregando..." style="background:#F3F4F6;color:#374151;">
+          <input class="q10-form-input" id="q10-op-asesor" disabled value="${htmlAttr(asesorLabel)}" style="background:#F3F4F6;color:${asesorWarning ? '#B91C1C' : '#374151'};">
           <p style="font-size:11px;color:#6B7280;margin:4px 0 0">Configurado nas Opções da extensão.</p>
         </div>
+
         <div class="q10-form-group">
           <label class="q10-form-label">¿Cómo se enteró? *</label>
-          <select class="q10-form-select" id="q10-op-medio-pub"><option value="">Carregando...</option></select>
+          <select class="q10-form-select" id="q10-op-medio-pub">
+            <option value="">— Selecciona —</option>
+            ${mediosPub || '<option value="" disabled>No hay medios disponibles</option>'}
+          </select>
         </div>
+
         <div class="q10-form-row">
           <div class="q10-form-group">
             <label class="q10-form-label">Medio de contacto</label>
-            <select class="q10-form-select" id="q10-op-medio-ctc"><option value="">Carregando...</option></select>
+            <select class="q10-form-select" id="q10-op-medio-ctc">
+              <option value="">— Selecciona —</option>
+              ${mediosCtc || '<option value="" disabled>No hay medios disponibles</option>'}
+            </select>
           </div>
           <div class="q10-form-group">
             <label class="q10-form-label">¿Ha estudiado anteriormente Portugues?</label>
@@ -399,124 +468,80 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
             </select>
           </div>
         </div>
+
         <p style="font-size:11px;color:#6B7280;margin:0">* Campos obrigatórios</p>
       </div>
-      <div class="q10-modal-footer">
-        <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
-        <button class="q10-btn q10-btn-cta" id="q10-op-submit">Registrar Lead</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-  overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
-  overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
+    `;
 
-  // Carrega medios + asesor configurado em paralelo.
-  // API real retorna Consecutivo_medio_publicitario / Nombre_medio_publicitario
-  // (e _medio_contacto pro outro endpoint), não Consecutivo / Nombre genéricos.
-  // Fallbacks cobrem ambos os formatos caso o tenant retorne diferente.
-  sendMsg('fetchMedios').then(data => {
-    const pubSel = document.getElementById('q10-op-medio-pub');
+    // Pre-select WhatsApp as the contact medium when the option exists.
     const ctcSel = document.getElementById('q10-op-medio-ctc');
-    if (!pubSel || !ctcSel) return;
-    const optHtml = (id, name) => `<option value="${htmlAttr(id)}">${htmlText(name)}</option>`;
-    pubSel.innerHTML = '<option value="">— Selecciona —</option>' +
-      (data.mediospublicitarios || []).map(m => {
-        const id = m.Consecutivo_medio_publicitario ?? m.Consecutivo;
-        const name = m.Nombre_medio_publicitario || m.Nombre || m.Descripcion || id;
-        return optHtml(id, name);
-      }).join('');
-    ctcSel.innerHTML = '<option value="">— Selecciona —</option>' +
-      (data.medioscontacto || []).map(m => {
-        const id = m.Consecutivo_medio_contacto ?? m.Consecutivo;
-        const name = m.Nombre_medio_contacto || m.Nombre || m.Descripcion || id;
-        return optHtml(id, name);
-      }).join('');
-    Array.from(ctcSel.options).forEach(opt => {
-      if (opt.text.toLowerCase().includes('whatsapp')) ctcSel.value = opt.value;
-    });
-  }).catch(() => {
-    const pubSel = document.getElementById('q10-op-medio-pub');
-    const ctcSel = document.getElementById('q10-op-medio-ctc');
-    if (pubSel) pubSel.innerHTML = '<option value="">— Não disponível —</option>';
-    if (ctcSel) ctcSel.innerHTML = '<option value="">— Não disponível —</option>';
-  });
-
-  // Asesor: lê o id salvo + busca o nome no /administrativos cache.
-  Promise.all([
-    sendMsg('getAsesor'),
-    sendMsg('fetchAdministrativos').catch(() => ({ data: [] }))
-  ]).then(([asesorResp, adminResp]) => {
-    const asesorInput = document.getElementById('q10-op-asesor');
-    if (!asesorInput) return;
-    const id = asesorResp?.asesorId;
-    if (!id) {
-      asesorInput.value = '⚠️ Não configurado — abra as Opções da extensão';
-      asesorInput.style.color = '#B91C1C';
-      return;
+    if (ctcSel) {
+      Array.from(ctcSel.options).forEach(opt => {
+        if (opt.text.toLowerCase().includes('whatsapp')) ctcSel.value = opt.value;
+      });
     }
-    const list = Array.isArray(adminResp) ? adminResp : (adminResp?.data || []);
-    const match = list.find(a => a.Numero_identificacion === id);
-    const name = match
-      ? [match.Primer_nombre, match.Segundo_nombre, match.Primer_apellido, match.Segundo_apellido].filter(Boolean).join(' ').trim()
-      : '';
-    asesorInput.value = name ? `${name} (${id})` : id;
-  }).catch(() => {
-    const asesorInput = document.getElementById('q10-op-asesor');
-    if (asesorInput) asesorInput.value = '— Erro carregando asesor —';
-  });
 
-  document.getElementById('q10-op-submit').addEventListener('click', async () => {
-    const ident = document.getElementById('q10-op-ident').value.trim();
-    const medioPub = document.getElementById('q10-op-medio-pub').value;
-    if (!ident) { showToast('Identificación é obrigatória', 'error'); document.getElementById('q10-op-ident').style.borderColor='#EF4444'; return; }
-    if (!medioPub) { showToast('¿Cómo se enteró? é obrigatório', 'error'); document.getElementById('q10-op-medio-pub').style.borderColor='#EF4444'; return; }
+    showActions(`
+      <button class="q10-btn q10-btn-cta" id="q10-op-submit" style="flex:1;">
+        ${icon('check','q10-btn-icon')} Registrar Lead
+      </button>
+    `);
 
-    const btn = document.getElementById('q10-op-submit');
-    btn.disabled = true; btn.textContent = 'Registrando...';
-    try {
-      const cel = document.getElementById('q10-op-phone').value.replace(/\D/g,'').slice(-12);
-      const email = document.getElementById('q10-op-email').value.trim();
-      const tel = document.getElementById('q10-op-tel').value.trim();
-      const addr = document.getElementById('q10-op-addr').value.trim();
-      const muni = document.getElementById('q10-op-muni').value.trim();
-      const dist = document.getElementById('q10-op-dist').value.trim();
-      const medioCtc = document.getElementById('q10-op-medio-ctc').value;
-      const cfPortugues = document.getElementById('q10-op-cf-portugues').value;
+    document.getElementById('q10-op-back').addEventListener('click', () => restoreView());
 
-      const body = {
-        Nombre_oportunidad: ident,
-        Numero_identificacion_oportunidad: ident,
-        Consecutivo_como_se_entero: parseInt(medioPub),
-      };
-      if (cel) body.Celular = cel;
-      if (email) body.Correo_electronico = email;
-      if (tel) body.Telefono = tel;
-      if (addr) body.Direccion = addr;
-      if (muni) body.Municipio = muni;
-      if (dist) body.Distrito = dist;
-      if (medioCtc) body.Consecutivo_medio_contacto = parseInt(medioCtc);
-      if (cfPortugues) {
-        // Custom field "¿Ha estudiando anteriormente Portugues?"
-        // (Consecutivo_campo_personalizado=1, Tipo_campo "Sí o No").
-        body.Campos_personalizados = [
-          { Consecutivo_campo_personalizado: 1, Valor: cfPortugues }
-        ];
+    document.getElementById('q10-op-submit').addEventListener('click', async () => {
+      const ident = document.getElementById('q10-op-ident').value.trim();
+      const medioPub = document.getElementById('q10-op-medio-pub').value;
+      if (!ident) { showToast('Identificación é obrigatória', 'error'); document.getElementById('q10-op-ident').style.borderColor = '#EF4444'; return; }
+      if (!medioPub) { showToast('¿Cómo se enteró? é obrigatório', 'error'); document.getElementById('q10-op-medio-pub').style.borderColor = '#EF4444'; return; }
+
+      const btn = document.getElementById('q10-op-submit');
+      btn.disabled = true;
+      btn.innerHTML = `<div class="q10-spinner" style="width:18px;height:18px;border-width:2px;"></div> Registrando...`;
+      try {
+        const cel = document.getElementById('q10-op-phone').value.replace(/\D/g, '').slice(-12);
+        const email = document.getElementById('q10-op-email').value.trim();
+        const tel = document.getElementById('q10-op-tel').value.trim();
+        const addr = document.getElementById('q10-op-addr').value.trim();
+        const muni = document.getElementById('q10-op-muni').value.trim();
+        const dist = document.getElementById('q10-op-dist').value.trim();
+        const medioCtc = document.getElementById('q10-op-medio-ctc').value;
+        const cfPortugues = document.getElementById('q10-op-cf-portugues').value;
+
+        const reqBody = {
+          Nombre_oportunidad: ident,
+          Numero_identificacion_oportunidad: ident,
+          Consecutivo_como_se_entero: parseInt(medioPub),
+        };
+        if (cel) reqBody.Celular = cel;
+        if (email) reqBody.Correo_electronico = email;
+        if (tel) reqBody.Telefono = tel;
+        if (addr) reqBody.Direccion = addr;
+        if (muni) reqBody.Municipio = muni;
+        if (dist) reqBody.Distrito = dist;
+        if (medioCtc) reqBody.Consecutivo_medio_contacto = parseInt(medioCtc);
+        if (cfPortugues) {
+          reqBody.Campos_personalizados = [
+            { Consecutivo_campo_personalizado: 1, Valor: cfPortugues }
+          ];
+        }
+        await sendMsg('createOportunidad', { body: reqBody });
+        showToast('Lead registrado en Q10 ✓', 'success');
+        sendMsg('clearCache').catch(() => {});
+        if (currentPhone) searchPhone(currentPhone);
+        else restoreView();
+      } catch (err) {
+        const msg = err.message || '';
+        const friendly = /no se encuentra registrado un asesor/i.test(msg)
+          ? 'O asesor selecionado nas Opções não está cadastrado como asesor no Q10. Vá em Q10 → Mercadeo → Asesores e cadastre, ou troque o asesor nas Opções da extensão.'
+          : msg;
+        showToast(friendly, 'error');
+        btn.disabled = false;
+        btn.innerHTML = `${icon('check','q10-btn-icon')} Registrar Lead`;
       }
-      await sendMsg('createOportunidad', { body });
-      showToast('Lead registrado en Q10 ✓', 'success');
-      removeModal();
-      sendMsg('clearCache').catch(() => {});
-      if (currentPhone) searchPhone(currentPhone);
-    } catch (err) {
-      // Mensagem amigável para o erro mais comum: asesor não cadastrado.
-      const msg = err.message || '';
-      const friendly = /no se encuentra registrado un asesor/i.test(msg)
-        ? 'O asesor selecionado nas Opções não está cadastrado como asesor no Q10. Vá em Q10 → Mercadeo → Asesores e cadastre, ou troque o asesor nas Opções da extensão.'
-        : msg;
-      showToast(friendly, 'error');
-      btn.disabled = false; btn.textContent = 'Registrar Lead';
-    }
+    });
+  }).catch(err => {
+    renderError('Error cargando datos: ' + (err?.message || err));
   });
 }
 
