@@ -360,58 +360,73 @@
         || null;
   }
 
+  // Walk every attribute on `el` looking for "PHONE@c.us"; return the phone
+  // string or null. Modern WA Web rotates the attribute name often (data-id,
+  // data-list-item-id, data-testid, aria-labelledby, id, etc.) — scanning
+  // them all is more resilient than guessing.
+  function phoneFromAnyAttr(el) {
+    if (!el || !el.attributes) return null;
+    for (let i = 0; i < el.attributes.length; i++) {
+      const v = el.attributes[i].value || '';
+      const m = v.match(/(\d{10,15})@c\.us/);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
   function extractVisibleChatContacts() {
     const contacts = new Map();
     const pane = findChatListPane();
     if (!pane) return contacts;
 
-    // Modern WA Web (2024+) uses [role="listitem"] for chat rows; older
-    // versions exposed [data-id="PHONE@c.us"] directly. Try both, plus a
-    // catch-all that walks every descendant looking for an @c.us attribute.
-    const itemSets = [
-      pane.querySelectorAll('[data-id]'),
-      pane.querySelectorAll('[role="listitem"]'),
-      pane.querySelectorAll('[role="row"]'),
-    ];
+    // Find row containers. Try several roles in order; some WA builds use
+    // listitem, others use row, others nothing.
+    let rows = pane.querySelectorAll('[role="listitem"]');
+    if (!rows.length) rows = pane.querySelectorAll('[role="row"]');
+    if (!rows.length) rows = pane.querySelectorAll('[data-id]');
 
-    const seenItems = new Set();
-    for (const items of itemSets) {
-      items.forEach(item => {
-        if (seenItems.has(item)) return;
-        seenItems.add(item);
-
-        // Phone discovery: check the item itself and every descendant for
-        // any attribute containing "PHONE@c.us" — handles the case where
-        // WA moved the data-id one level down.
-        let phone = null;
-        const own = item.getAttribute?.('data-id') || '';
-        let m = own.match(/(\d{10,15})@c\.us/);
-        if (m) {
-          phone = m[1];
-        } else {
-          const dataIdChild = item.querySelector('[data-id*="@c.us"]');
-          if (dataIdChild) {
-            m = (dataIdChild.getAttribute('data-id') || '').match(/(\d{10,15})@c\.us/);
-            if (m) phone = m[1];
-          }
+    rows.forEach(row => {
+      // Phone: scan the row + every descendant for any attribute containing
+      // an @c.us identifier. Skips groups (@g.us) automatically.
+      let phone = phoneFromAnyAttr(row);
+      if (!phone) {
+        const descendants = row.querySelectorAll('*');
+        for (const d of descendants) {
+          phone = phoneFromAnyAttr(d);
+          if (phone) break;
         }
-        // Skip groups (@g.us) and rows that don't carry a phone.
-        if (!phone) return;
+      }
+      if (!phone) return;
 
-        // Name: try several selectors, preferring the cell-frame-title
-        // structure but falling back to any visible span with a title or
-        // dir attribute.
-        const nameEl =
-          item.querySelector('[data-testid="cell-frame-title"] span') ||
-          item.querySelector('[title]:not([title=""])') ||
-          item.querySelector('span[dir="auto"]') ||
-          item.querySelector('span[title]');
+      const nameEl =
+        row.querySelector('[data-testid="cell-frame-title"] span') ||
+        row.querySelector('[title]:not([title=""])') ||
+        row.querySelector('span[dir="auto"]') ||
+        row.querySelector('span[title]');
+      const rawName = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
+      const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
+
+      if (!contacts.has(phone)) contacts.set(phone, { phone, name });
+    });
+
+    // Last-ditch sweep: if rows didn't yield anything, walk the entire pane
+    // looking for any element with an @c.us attribute. Slower but catches
+    // builds where WA flattened the structure or hid the row containers.
+    if (contacts.size === 0) {
+      pane.querySelectorAll('*').forEach(el => {
+        const phone = phoneFromAnyAttr(el);
+        if (!phone || contacts.has(phone)) return;
+        // Walk up to find a plausible row to grab the name from.
+        const row = el.closest('[role="listitem"], [role="row"], li, div[tabindex]') || el.parentElement;
+        const nameEl = row?.querySelector('[title]:not([title=""])')
+          || row?.querySelector('span[dir="auto"]')
+          || row?.querySelector('span');
         const rawName = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
         const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
-
-        if (!contacts.has(phone)) contacts.set(phone, { phone, name });
+        contacts.set(phone, { phone, name });
       });
     }
+
     return contacts;
   }
 
@@ -528,10 +543,28 @@
     log('[batch] extraction finished. contacts:', result.length);
 
     if (result.length === 0) {
+      // Dump diagnostics so we can see why the scraper failed. Most common
+      // cause is a fresh WA Web bundle that hides @c.us identifiers from the
+      // DOM entirely. The user can paste this snippet back to us.
+      try {
+        const paneDump = pane ? {
+          tag: pane.tagName,
+          id: pane.id,
+          ariaLabel: pane.getAttribute('aria-label'),
+          role: pane.getAttribute('role'),
+          listItemCount: pane.querySelectorAll('[role="listitem"]').length,
+          rowCount: pane.querySelectorAll('[role="row"]').length,
+          dataIdCount: pane.querySelectorAll('[data-id]').length,
+          firstChildAttrs: pane.firstElementChild ? Array.from(pane.firstElementChild.attributes || []).map(a => `${a.name}="${a.value.slice(0,40)}"`) : null,
+          firstRowSnippet: (pane.querySelector('[role="listitem"]') || pane.querySelector('[role="row"]') || pane.firstElementChild)?.outerHTML?.slice(0, 400) || null
+        } : null;
+        log('[batch] DIAGNOSTIC dump (paste this back if 0 contacts):', JSON.stringify(paneDump, null, 2));
+      } catch (e) { warn('[batch] diagnostic dump failed:', e.message); }
+
       chrome.runtime.sendMessage({
         action: 'batchExtractComplete',
         ok: false,
-        error: 'Nenhuma conversa individual encontrada. Verifique se há chats com contatos pessoais (não grupos) na lista do WhatsApp Web e que ela esteja visível no painel lateral.'
+        error: 'Nenhuma conversa individual encontrada. Abra o DevTools (F12) na aba do WhatsApp Web, copie o "[batch] DIAGNOSTIC dump" do console e envie ao suporte para atualizar os seletores.'
       });
       return;
     }
