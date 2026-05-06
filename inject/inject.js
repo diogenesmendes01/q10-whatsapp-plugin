@@ -67,29 +67,65 @@
     try {
       var id = chat.id && chat.id._serialized ? chat.id._serialized : (chat.id && chat.id.toString ? chat.id.toString() : '');
       var isGroup = id.endsWith('@g.us');
-      var phone = isGroup ? null : cleanPhone(id);
 
-      // Get contact name (multiple fallbacks)
-      var name = null;
-      if (chat.name) {
-        name = chat.name;
-      } else if (chat.formattedTitle) {
-        name = chat.formattedTitle;
-      } else if (chat.contact) {
-        name = chat.contact.pushname || chat.contact.formattedName || chat.contact.name || chat.contact.shortName;
+      // Phone resolution. Try the chat id first; if it's an @lid identifier,
+      // fall back to the linked contact's id (which is usually @c.us). Modern
+      // WA assigns LID to many chats — only the contact carries the phone.
+      var phone = null;
+      if (!isGroup) {
+        phone = cleanPhone(id);
+        if (!phone && chat.contact) {
+          var cId = chat.contact.id;
+          var cIdStr = cId && cId._serialized ? cId._serialized : (cId && cId.toString ? cId.toString() : '');
+          phone = cleanPhone(cIdStr);
+          if (!phone && chat.contact.userid) {
+            phone = cleanPhone(String(chat.contact.userid));
+          }
+          if (!phone && chat.contact.phoneNumber) {
+            phone = cleanPhone(String(chat.contact.phoneNumber));
+          }
+        }
       }
 
-      // Try adapter.getContactById() for better name data
+      // Display name: prefer saved-contact names, but skip values that are
+      // just the formatted phone (WA falls back to that for unsaved contacts)
+      // and pick the pushname instead — that's the name the contact set on
+      // their own WhatsApp account.
+      function notDigitsOnly(s) {
+        if (!s) return false;
+        return !/^[\d\s\+\-\(\)‎‏]+$/.test(String(s));
+      }
+      var nameCandidates = [
+        chat.name,
+        chat.formattedTitle,
+        chat.contact && chat.contact.formattedName,
+        chat.contact && chat.contact.name,
+      ];
+      var name = null;
+      for (var i = 0; i < nameCandidates.length; i++) {
+        if (notDigitsOnly(nameCandidates[i])) { name = String(nameCandidates[i]); break; }
+      }
+      if (!name && chat.contact) {
+        if (notDigitsOnly(chat.contact.pushname)) name = String(chat.contact.pushname);
+        else if (notDigitsOnly(chat.contact.shortName)) name = String(chat.contact.shortName);
+      }
       if (!name && !isGroup && adapter && adapter.isAvailable()) {
         try {
           var contact = adapter.getContactById(chat.id);
           if (contact) {
-            name = contact.pushname || contact.formattedName || contact.name || contact.shortName;
+            var fromAdapter = contact.formattedName || contact.name || contact.pushname || contact.shortName;
+            if (notDigitsOnly(fromAdapter)) name = String(fromAdapter);
           }
         } catch (_) { /* skip */ }
       }
 
-      // Profile pic
+      // Optional enrichment available on business accounts.
+      var email = null;
+      try {
+        var bp = chat.contact && chat.contact.businessProfile;
+        if (bp && bp.email) email = String(bp.email);
+      } catch (_) { /* skip */ }
+
       var profilePic = null;
       try {
         profilePic = chat.contact && chat.contact.profilePicThumb && chat.contact.profilePicThumb.eurl ? chat.contact.profilePicThumb.eurl : null;
@@ -98,6 +134,7 @@
       return {
         phone: phone,
         name: name || null,
+        email: email,
         isGroup: isGroup,
         chatId: id,
         profilePic: profilePic
@@ -109,12 +146,19 @@
   }
 
   /**
-   * Clean phone from chatId format: "5519988145438@c.us" → "5519988145438"
+   * Clean phone from chatId format: "5519988145438@c.us" → "5519988145438".
+   * Returns null for LID identifiers ("12345@lid") and other non-phone shapes
+   * — caller should retry via the linked contact for those.
    */
   function cleanPhone(chatId) {
     if (!chatId) return null;
-    var match = chatId.match(/^(\d+)@/);
-    return match ? match[1] : chatId.replace(/@.*$/, '').replace(/\D/g, '') || null;
+    // Only @c.us / s.whatsapp.net carry actual phone numbers in the prefix.
+    var match = chatId.match(/^(\d{10,15})@(?:c\.us|s\.whatsapp\.net)$/);
+    if (match) return match[1];
+    // Last-resort: a 10-15 digit string (covers raw phone passed in).
+    var raw = String(chatId).replace(/\D/g, '');
+    if (raw.length >= 10 && raw.length <= 15) return raw;
+    return null;
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -123,10 +167,15 @@
 
   function getChatIdFromDOM() {
     try {
+      // Modern message ids: "false_PHONE@c.us_MSGID" or "false_LID@lid_MSGID";
+      // older ones can use @s.whatsapp.net or @broadcast. Match all of them.
+      var msgIdRegex = /(?:true|false)_([\w\.\-]+@(?:c\.us|lid|g\.us|s\.whatsapp\.net|broadcast))/;
+      var attrIdRegex = /([\w\.\-]+@(?:c\.us|lid|g\.us|s\.whatsapp\.net))/;
+
       var msgEl = document.querySelector('#main [data-id]');
       if (msgEl) {
         var dataId = msgEl.getAttribute('data-id') || '';
-        var match = dataId.match(/(?:true|false)_(\d+@\w+\.us)/);
+        var match = dataId.match(msgIdRegex);
         if (match) return match[1];
       }
 
@@ -134,7 +183,7 @@
       if (panel) {
         var attrs = Array.from(panel.attributes);
         for (var i = 0; i < attrs.length; i++) {
-          var m = attrs[i].value.match(/(\d+@\w+\.us)/);
+          var m = attrs[i].value.match(attrIdRegex);
           if (m) return m[1];
         }
       }
@@ -157,8 +206,24 @@
       var cleanedPhone = cleanPhoneFromText(title);
       var isGroup = chatId ? chatId.endsWith('@g.us') : false;
 
+      // If the chat id is a LID and we have access to the Store, look up the
+      // linked contact to recover the real phone number — without this the
+      // forms get name only and the user can't search by phone.
+      var phone = cleanedPhone || (chatId ? cleanPhone(chatId) : null);
+      if (!phone && chatId && chatId.endsWith('@lid') && window.Q10StoreAdapter) {
+        try {
+          var adapter = window.Q10StoreAdapter;
+          if (adapter.isAvailable()) {
+            var chat = adapter.getChatById(chatId);
+            if (chat && chat.contact && chat.contact.id) {
+              phone = cleanPhone(chat.contact.id._serialized || chat.contact.id.toString());
+            }
+          }
+        } catch (_) { /* skip */ }
+      }
+
       return {
-        phone: cleanedPhone || (chatId ? cleanPhone(chatId) : null),
+        phone: phone,
         name: cleanedPhone ? null : title,
         isGroup: isGroup,
         chatId: chatId || null,
