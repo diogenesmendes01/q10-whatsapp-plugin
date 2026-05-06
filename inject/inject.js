@@ -364,6 +364,68 @@
           break;
         }
 
+        case 'Q10_GET_ALL_CHATS': {
+          // Pull every chat the WA Store knows about and return a flat list
+          // for the batch leads extractor. Skips groups; carries the last-msg
+          // timestamp (seconds) so the sidepanel can filter by cutoff date
+          // without needing to scrape the chat-list pane.
+          var adapter = window.Q10StoreAdapter;
+          var requestId = msg.requestId || null;
+          var available = !!(adapter && adapter.isAvailable() && !adapter.isBroken());
+          if (!available) {
+            window.postMessage({
+              type: 'Q10_ALL_CHATS',
+              requestId: requestId,
+              ok: false,
+              error: 'store_unavailable',
+              chats: []
+            }, '*');
+            break;
+          }
+          try {
+            var chats = adapter.getAllChats() || [];
+            var out = [];
+            for (var i = 0; i < chats.length; i++) {
+              var c = chats[i];
+              try {
+                var rawId = c.id && c.id._serialized ? c.id._serialized : (c.id && c.id.toString ? c.id.toString() : '');
+                if (!rawId || !rawId.endsWith('@c.us')) continue; // skip groups & broadcasts
+                var phone = cleanPhone(rawId);
+                if (!phone) continue;
+                var name = c.name || c.formattedTitle || (c.contact && (c.contact.pushname || c.contact.formattedName || c.contact.name || c.contact.shortName)) || null;
+                if (!name) {
+                  try {
+                    var contact = adapter.getContactById(c.id);
+                    if (contact) {
+                      name = contact.pushname || contact.formattedName || contact.name || contact.shortName || null;
+                    }
+                  } catch (_) { /* skip */ }
+                }
+                // If "name" is just the phone digits, normalize to empty so
+                // downstream UI can show a placeholder instead of a duplicate.
+                if (name && /^[\d\s\+\-\(\)]+$/.test(String(name))) name = '';
+                var ts = (typeof c.t === 'number' ? c.t : (c.lastReceivedKey && c.lastReceivedKey.t) || 0) | 0;
+                out.push({ phone: phone, name: name || '', lastMsgTimestamp: ts });
+              } catch (_) { /* skip individual chat errors */ }
+            }
+            window.postMessage({
+              type: 'Q10_ALL_CHATS',
+              requestId: requestId,
+              ok: true,
+              chats: out
+            }, '*');
+          } catch (err) {
+            window.postMessage({
+              type: 'Q10_ALL_CHATS',
+              requestId: requestId,
+              ok: false,
+              error: err && err.message ? err.message : 'getAllChats_failed',
+              chats: []
+            }, '*');
+          }
+          break;
+        }
+
         default:
           break;
       }

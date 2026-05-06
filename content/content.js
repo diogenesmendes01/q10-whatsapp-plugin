@@ -415,13 +415,63 @@
     return contacts;
   }
 
+  // Ask inject.js for the full chat list via the WA Store API. Returns
+  // null on timeout or store unavailability so the caller can fall back to
+  // DOM scraping. Filters by cutoffMs (last message timestamp) when given.
+  function getAllChatsViaStore(cutoffMs) {
+    return new Promise((resolve) => {
+      const requestId = 'q10-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+      const timeout = setTimeout(() => {
+        window.removeEventListener('message', handler);
+        resolve(null);
+      }, 4000);
+
+      function handler(ev) {
+        if (ev.source !== window) return;
+        const d = ev.data;
+        if (!d || d.type !== 'Q10_ALL_CHATS' || d.requestId !== requestId) return;
+        clearTimeout(timeout);
+        window.removeEventListener('message', handler);
+        if (!d.ok) { resolve(null); return; }
+        const cutoffSec = cutoffMs ? Math.floor(cutoffMs / 1000) : 0;
+        const filtered = (d.chats || []).filter(c => {
+          if (!cutoffSec) return true;
+          if (!c.lastMsgTimestamp) return true; // unknown ts — keep
+          return c.lastMsgTimestamp >= cutoffSec;
+        });
+        resolve(filtered);
+      }
+
+      window.addEventListener('message', handler);
+      window.postMessage({ type: 'Q10_GET_ALL_CHATS', requestId: requestId }, '*');
+    });
+  }
+
   async function runBatchExtraction(cutoffMs) {
     const myGen = ++batchGen;
     batchExtracting = true;
     const allContacts = new Map();
-    const pane = findChatListPane();
 
-    log('[batch] starting extraction. pane found:', !!pane, 'cutoffMs:', cutoffMs);
+    log('[batch] starting extraction. cutoffMs:', cutoffMs);
+
+    // Preferred path: WA Store API via inject.js (covers all chats at once,
+    // no scrolling, no virtualization gymnastics). Falls back to DOM scraping
+    // if the Store isn't ready or the response times out.
+    const storeChats = await getAllChatsViaStore(cutoffMs);
+    if (myGen !== batchGen) return;
+    if (storeChats && storeChats.length) {
+      storeChats.forEach(c => allContacts.set(c.phone, { phone: c.phone, name: c.name || '' }));
+      log('[batch] store extraction succeeded. contacts:', allContacts.size);
+      chrome.runtime.sendMessage({ action: 'batchExtractProgress', count: allContacts.size });
+      batchExtracting = false;
+      const result = Array.from(allContacts.values());
+      chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: true, data: result });
+      return;
+    }
+    log('[batch] store extraction unavailable or empty, falling back to DOM scraping');
+
+    const pane = findChatListPane();
+    log('[batch] pane found:', !!pane);
 
     if (!pane) {
       chrome.runtime.sendMessage({ action: 'batchExtractComplete', ok: false, error: 'Painel de conversas não encontrado. Abra a aba do WhatsApp Web e certifique-se de que a lista de conversas está visível.' });
