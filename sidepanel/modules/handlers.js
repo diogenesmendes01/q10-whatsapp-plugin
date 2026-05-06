@@ -493,16 +493,30 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
     document.getElementById('q10-op-back').addEventListener('click', () => restoreView());
 
     document.getElementById('q10-op-submit').addEventListener('click', async () => {
-      const ident = document.getElementById('q10-op-ident').value.trim();
+      // Q10's database column for the lead name doesn't accept 4-byte UTF-8
+      // (no utf8mb4) — emoji and flag characters get stored as "????".
+      // Strip everything outside the Basic Multilingual Plane before send.
+      const stripBmp = (s) => String(s || '').replace(/[\u{10000}-\u{10FFFF}]/gu, '').replace(/\s+/g, ' ').trim();
+      const rawIdent = document.getElementById('q10-op-ident').value.trim();
+      const ident = stripBmp(rawIdent);
       const medioPub = document.getElementById('q10-op-medio-pub').value;
       if (!ident) { showToast('Identificación é obrigatória', 'error'); document.getElementById('q10-op-ident').style.borderColor = '#EF4444'; return; }
       if (!medioPub) { showToast('¿Cómo se enteró? é obrigatório', 'error'); document.getElementById('q10-op-medio-pub').style.borderColor = '#EF4444'; return; }
+      if (rawIdent !== ident) {
+        showToast('Emojis foram removidos do nome (Q10 não aceita).', 'info');
+      }
 
       const btn = document.getElementById('q10-op-submit');
       btn.disabled = true;
       btn.innerHTML = `<div class="q10-spinner" style="width:18px;height:18px;border-width:2px;"></div> Registrando...`;
       try {
-        const cel = document.getElementById('q10-op-phone').value.replace(/\D/g, '').slice(-12);
+        // Phone normalization: strip non-digits, then drop the BR country code
+        // (55) when the result is a 13-digit mobile, since Q10's Celular
+        // field tops out at 12 digits and a blind .slice(-12) would chop the
+        // leading "5" of "55" — turning a valid number into junk.
+        let cel = document.getElementById('q10-op-phone').value.replace(/\D/g, '');
+        if (cel.length === 13 && cel.startsWith('55')) cel = cel.slice(2);
+        else if (cel.length > 12) cel = cel.slice(-12);
         const email = document.getElementById('q10-op-email').value.trim();
         const tel = document.getElementById('q10-op-tel').value.trim();
         const addr = document.getElementById('q10-op-addr').value.trim();
