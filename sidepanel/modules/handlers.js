@@ -1121,6 +1121,10 @@ export function showCreateActividadModal(contactData) {
       await sendMsg('createActividad', { body });
       showToast('Actividad registrada ✓', 'success');
       removeModal();
+      // Refresh the side panel so the new activity shows up under
+      // "Actividades Recientes" without the user having to switch chats.
+      await sendMsg('clearCache').catch(() => {});
+      if (currentPhone) searchPhone(currentPhone);
     } catch (err) {
       const msg = err.message || '';
       const friendly = /no se encuentra registrado un asesor/i.test(msg)

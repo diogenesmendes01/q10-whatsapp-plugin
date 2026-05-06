@@ -560,7 +560,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (!body.Fecha_actividad) {
           body.Fecha_actividad = new Date().toISOString().split('T')[0];
         }
-        return apiPost('/actividades', body);
+        const result = await apiPost('/actividades', body);
+        // Clear cache so the next searchByPhone re-renders with the new
+        // activity in the list.
+        cache.clear();
+        return result;
       })());
 
     case 'getAsesorId':

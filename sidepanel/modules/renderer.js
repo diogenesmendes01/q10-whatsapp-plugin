@@ -221,6 +221,14 @@ export function renderContacto(data) {
   `);
 }
 
+// Map Q10's single-letter Tipo_resultado codes to human-readable labels.
+// Best-effort mapping based on typical Q10 conventions; falls back to the
+// raw code so unknown values still surface something meaningful.
+function formatTipoResultado(code) {
+  const map = { P: 'Positivo', N: 'Negativo', S: 'Sin respuesta', A: 'Aplazada' };
+  return map[String(code || '').toUpperCase()] || code || '';
+}
+
 // ================================================================
 //  RENDER: OPORTUNIDAD
 // ================================================================
@@ -324,15 +332,49 @@ export function renderOportunidad(result) {
 
   let actividadesHtml = '';
   if (result.actividades && result.actividades.length > 0) {
+    const now = Date.now();
+    // Sort: pending programadas first (soonest first), then completed
+    // (newest first). Helps the asesor see what's due next at a glance.
+    const sorted = result.actividades.slice().sort((a, b) => {
+      const aProgr = (a.Estado_actividad === 'P');
+      const bProgr = (b.Estado_actividad === 'P');
+      if (aProgr !== bProgr) return aProgr ? -1 : 1;
+      const aDate = new Date(a.Fecha_actividad || a.Fecha || 0).getTime();
+      const bDate = new Date(b.Fecha_actividad || b.Fecha || 0).getTime();
+      return aProgr ? aDate - bDate : bDate - aDate;
+    });
+
     actividadesHtml = `
       <div class="q10-section">
         <div class="q10-section-title">${icon('activity','q10-section-icon')} Actividades Recientes</div>
-        ${result.actividades.map(a => `
-          <div class="q10-activity-item">
-            <div class="q10-activity-type">${htmlText(a.Tipo_actividad || a.Tipo, 'Actividad')}</div>
-            <div class="q10-activity-desc">${htmlText(a.Resultado_actividad || a.Descripcion || a.Observaciones)}</div>
-            <div class="q10-activity-date">${a.Fecha_actividad || a.Fecha ? fmtDate(a.Fecha_actividad || a.Fecha) : ''}</div>
-          </div>`).join('')}
+        ${sorted.map(a => {
+          const tipo = a.Tipo_actividad || a.Tipo || 'Actividad';
+          const isProgramada = a.Estado_actividad === 'P';
+          const fechaRaw = a.Fecha_actividad || a.Fecha;
+          const fechaMs = fechaRaw ? new Date(fechaRaw).getTime() : 0;
+          const isOverdue = isProgramada && fechaMs && fechaMs < now;
+          const desc = isProgramada
+            ? (a.Descripcion_actividad || a.Descripcion || a.Observaciones)
+            : (a.Resultado_actividad || a.Resultado || a.Descripcion || a.Observaciones);
+
+          // Visual: green left bar for completed, amber for programada,
+          // red for overdue programada.
+          const accent = isOverdue ? '#EF4444' : (isProgramada ? '#F59E0B' : '#10B981');
+          const bg = isOverdue ? '#FEF2F2' : (isProgramada ? '#FFFBEB' : '#F0FDF4');
+          const badgeText = isOverdue ? '⏰ Vencida' : (isProgramada ? '📅 Programada' : '✓ Completada');
+          const badgeColor = isOverdue ? '#991B1B' : (isProgramada ? '#92400E' : '#065F46');
+
+          return `
+            <div class="q10-activity-item" style="border-left:3px solid ${accent};background:${bg};">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;">
+                <span class="q10-activity-type" style="color:${accent};">${htmlText(tipo)}</span>
+                <span style="font-size:10px;font-weight:600;color:${badgeColor};white-space:nowrap;">${badgeText}</span>
+              </div>
+              <div class="q10-activity-desc">${htmlText(desc) || '<em style="color:#9CA3AF;">— sem descripción —</em>'}</div>
+              ${a.Tipo_resultado && !isProgramada ? `<div style="font-size:11px;color:#6B7280;margin-top:2px;">Resultado: ${htmlText(formatTipoResultado(a.Tipo_resultado))}</div>` : ''}
+              <div class="q10-activity-date">${fechaRaw ? fmtDate(fechaRaw) + (fechaRaw.length > 10 ? ' · ' + new Date(fechaRaw).toTimeString().slice(0,5) : '') : ''}</div>
+            </div>`;
+        }).join('')}
       </div>`;
   }
 
