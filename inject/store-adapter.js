@@ -196,13 +196,24 @@
                    : null;
 
       function loadCollection(id, fallbackProp) {
+        // Always call through `global.` so we keep the original `this`
+        // binding in case importNamespace/require depends on it.
         try {
-          var mod = importNs ? importNs(id) : req(id);
+          var mod = (typeof global.importNamespace === 'function')
+            ? global.importNamespace(id)
+            : global.require(id);
           if (!mod) {
             console.log(TAG, diag, 'module', id, 'returned falsy');
             return null;
           }
+          // Modules expose either `.default` or a named property — check both.
           var col = mod.default || (fallbackProp && mod[fallbackProp]) || null;
+          if (!col && mod[fallbackProp + 'Impl']) {
+            // Some modules (e.g. WAWebChatCollection in current builds) expose
+            // both ChatCollection (instance) and ChatCollectionImpl (class).
+            // Fall back to the *Impl when the named export is missing.
+            col = mod[fallbackProp + 'Impl'];
+          }
           if (!col) {
             console.log(TAG, diag, 'module', id, 'loaded but no default/' + fallbackProp + '. Keys:', Object.keys(mod).slice(0, 15));
           }

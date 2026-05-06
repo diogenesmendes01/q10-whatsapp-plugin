@@ -366,9 +366,9 @@
 
         case 'Q10_GET_ALL_CHATS': {
           // Pull every chat the WA Store knows about and return a flat list
-          // for the batch leads extractor. Skips groups; carries the last-msg
-          // timestamp (seconds) so the sidepanel can filter by cutoff date
-          // without needing to scrape the chat-list pane.
+          // for the batch leads extractor. Skips groups + LID-only chats
+          // (community channels etc); resolves LID-keyed chats to their
+          // phone number via the linked contact when possible.
           var adapter = window.Q10StoreAdapter;
           var requestId = msg.requestId || null;
           var available = !!(adapter && adapter.isAvailable() && !adapter.isBroken());
@@ -382,17 +382,49 @@
             }, '*');
             break;
           }
+
+          // Helper: extract a phone from any of several Wid-shaped objects.
+          function phoneFromWid(idObj) {
+            if (!idObj) return null;
+            var s = idObj._serialized || (typeof idObj === 'string' ? idObj : (idObj.toString && idObj.toString()) || '');
+            if (typeof s !== 'string') return null;
+            var m = s.match(/^(\d{10,15})@c\.us$/);
+            return m ? m[1] : null;
+          }
+          // Helper: extract a phone from any "user/userid"-shaped numeric field.
+          function phoneFromUserid(v) {
+            if (v == null) return null;
+            var m = String(v).match(/^(\d{10,15})/);
+            return m ? m[1] : null;
+          }
+
           try {
             var chats = adapter.getAllChats() || [];
             var out = [];
+            var skippedGroup = 0, skippedNoPhone = 0, skippedBroadcast = 0;
             for (var i = 0; i < chats.length; i++) {
               var c = chats[i];
               try {
                 var rawId = c.id && c.id._serialized ? c.id._serialized : (c.id && c.id.toString ? c.id.toString() : '');
-                if (!rawId || !rawId.endsWith('@c.us')) continue; // skip groups & broadcasts
-                var phone = cleanPhone(rawId);
-                if (!phone) continue;
-                var name = c.name || c.formattedTitle || (c.contact && (c.contact.pushname || c.contact.formattedName || c.contact.name || c.contact.shortName)) || null;
+                if (!rawId) { skippedNoPhone++; continue; }
+                if (rawId.endsWith('@g.us')) { skippedGroup++; continue; }
+                if (rawId.endsWith('@broadcast') || rawId.endsWith('@newsletter')) { skippedBroadcast++; continue; }
+
+                // Try multiple sources to find the phone number.
+                // Modern WA Web identifies many chats by LID (e.g. "12345@lid")
+                // instead of @c.us; the phone lives on the linked contact in
+                // that case.
+                var phone = phoneFromWid(c.id)
+                  || phoneFromWid(c.contact && c.contact.id)
+                  || phoneFromUserid(c.contact && c.contact.userid)
+                  || phoneFromUserid(c.contact && c.contact.phoneNumber);
+
+                if (!phone) { skippedNoPhone++; continue; }
+
+                var name = c.name
+                  || c.formattedTitle
+                  || (c.contact && (c.contact.pushname || c.contact.formattedName || c.contact.name || c.contact.shortName))
+                  || null;
                 if (!name) {
                   try {
                     var contact = adapter.getContactById(c.id);
@@ -401,13 +433,13 @@
                     }
                   } catch (_) { /* skip */ }
                 }
-                // If "name" is just the phone digits, normalize to empty so
-                // downstream UI can show a placeholder instead of a duplicate.
                 if (name && /^[\d\s\+\-\(\)]+$/.test(String(name))) name = '';
+
                 var ts = (typeof c.t === 'number' ? c.t : (c.lastReceivedKey && c.lastReceivedKey.t) || 0) | 0;
                 out.push({ phone: phone, name: name || '', lastMsgTimestamp: ts });
               } catch (_) { /* skip individual chat errors */ }
             }
+            console.log('[Q10 Inject] getAllChats: total=' + chats.length + ' kept=' + out.length + ' skipped(group=' + skippedGroup + ' broadcast=' + skippedBroadcast + ' nophone=' + skippedNoPhone + ')');
             window.postMessage({
               type: 'Q10_ALL_CHATS',
               requestId: requestId,
