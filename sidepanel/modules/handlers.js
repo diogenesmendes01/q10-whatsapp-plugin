@@ -97,10 +97,11 @@ export function exportConversation() {
   });
 }
 
-export function bindExportButtons() {
-  document.getElementById('q10-export-data')?.addEventListener('click', exportAllData);
-  document.getElementById('q10-export-chat')?.addEventListener('click', exportConversation);
-}
+// Export/Ver en Q10 buttons were removed from result cards (Apr 2026) — they
+// added clutter without delivering CRM value. The exportAllData and
+// exportConversation helpers stay in this file in case Batch Leads or other
+// future flows want to reuse them. No-op binder kept for backward compat.
+export function bindExportButtons() {}
 
 // ================================================================
 //  RENDER + BIND dispatch
@@ -955,15 +956,12 @@ export function showCreateActividadModal(contactData) {
 //  BIND ACTION BUTTONS (estudiante / oportunidad / contacto)
 // ================================================================
 export function bindEstudianteActions(d) {
-  bindExportButtons();
   document.getElementById('q10-gen-cobro')?.addEventListener('click', () => showGenerarCobroModal(d));
   document.getElementById('q10-log-activity')?.addEventListener('click', () => showCreateActividadModal(d));
   document.getElementById('q10-refresh-fin')?.addEventListener('click', () => refreshFinancials(d));
-  document.getElementById('q10-view-q10')?.addEventListener('click', () => window.open('https://app.q10.com', '_blank'));
 }
 
 export function bindOportunidadActions(d) {
-  bindExportButtons();
   document.getElementById('q10-start-enrollment')?.addEventListener('click', () => {
     startEnrollmentWizard(d.Celular || d.Telefono || currentPhone, d);
   });
@@ -971,17 +969,14 @@ export function bindOportunidadActions(d) {
   // (renderOportunidad picks based on whether negocios exist).
   document.getElementById('q10-log-activity')?.addEventListener('click', () => showCreateActividadModal(d));
   document.getElementById('q10-create-negocio')?.addEventListener('click', () => showCreateNegocioModal(d));
-  document.getElementById('q10-view-q10')?.addEventListener('click', () => window.open('https://app.q10.com', '_blank'));
 }
 
 export function bindContactoActions(data) {
-  bindExportButtons();
   document.getElementById('q10-start-enrollment')?.addEventListener('click', () => {
     startEnrollmentWizard(data.Celular || data.Telefono || currentPhone, data);
   });
   document.getElementById('q10-create-lead')?.addEventListener('click', () => showCreateOportunidadModal(currentPhone, null, data));
   document.getElementById('q10-log-activity')?.addEventListener('click', () => showCreateActividadModal(data));
-  document.getElementById('q10-view-q10')?.addEventListener('click', () => window.open('https://app.q10.com', '_blank'));
 }
 
 export function bindUnknownActions(detectedPhone, detectedName) {
