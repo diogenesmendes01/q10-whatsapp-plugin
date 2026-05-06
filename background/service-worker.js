@@ -540,29 +540,54 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'batchImportContacts':
       return handle((async () => {
         const contacts = msg.contacts || [];
+        // Q10 forbids standalone /contactos — POST /oportunidades first, then
+        // attach the contacto via the returned Consecutivo_oportunidad. Probe:
+        // POST /contactos {Consecutivo_oportunidad:0} → 404 "no se encontró
+        // una oportunidad"; omitting the field → 400 "obligatorio".
+        const asesorId = await getAsesorId();
         const results = [];
+        let abortReason = null;
         for (const c of contacts) {
+          if (abortReason) {
+            results.push({ phone: c.phone, ok: false, error: abortReason });
+            continue;
+          }
+          const phone = (c.phone || '').replace(/\D/g, '').slice(-12);
           try {
             const nameParts = (c.name || '').trim().split(/\s+/);
             const firstName = nameParts[0] || 'Contato';
             const lastName = nameParts.slice(1).join(' ') || 'WhatsApp';
-            const phone = (c.phone || '').replace(/\D/g, '');
-            const body = {
-              Consecutivo_oportunidad: 0,
+            const displayName = (c.name || '').trim() || phone || 'Contato WhatsApp';
+            const oportunidadBody = {
+              Nombre_oportunidad: displayName,
+              Numero_identificacion_oportunidad: displayName,
+            };
+            if (asesorId) oportunidadBody.Numero_identificacion_asesor = asesorId;
+            const oportunidad = await apiPost('/oportunidades', oportunidadBody);
+            const consecutivo = oportunidad?.Consecutivo_oportunidad ?? oportunidad?.Consecutivo;
+            if (!consecutivo) throw new Error('Resposta de /oportunidades sem Consecutivo_oportunidad');
+            const contactoBody = {
+              Consecutivo_oportunidad: consecutivo,
               Nombres: firstName,
               Apellidos: lastName,
-              Detalle: [{ Tipo_detalle: 'Celular', Descripcion: phone }]
+              Detalle: phone ? [{ Tipo_detalle: 'Celular', Descripcion: phone }] : [],
             };
-            await apiPost('/contactos', body);
+            await apiPost('/contactos', contactoBody);
             results.push({ phone, ok: true });
           } catch (e) {
-            results.push({ phone: c.phone, ok: false, error: e.message });
+            const errMsg = e.message || '';
+            if (/no se encuentra registrado un asesor/i.test(errMsg)) {
+              abortReason = 'O asesor configurado nas Opções não está cadastrado como asesor no Q10. Vá em Q10 → Mercadeo → Asesores. Importação interrompida.';
+              results.push({ phone: c.phone, ok: false, error: abortReason });
+            } else {
+              results.push({ phone: c.phone, ok: false, error: errMsg });
+            }
           }
         }
         const ok = results.filter(r => r.ok).length;
         const fail = results.filter(r => !r.ok).length;
         if (ok > 0) cache.clear();
-        return { results, summary: { ok, fail } };
+        return { results, summary: { ok, fail }, fatalError: abortReason };
       })());
 
     default:
