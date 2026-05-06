@@ -644,6 +644,116 @@ export function showCreateContactoModal(phone, detectedName = null) {
   });
 }
 
+// Modal for creating a Negocio inside an existing Oportunidad. Required
+// step before the user can register actividades — Q10 normally auto-creates
+// one with the oportunidad but some configs don't.
+export function showCreateNegocioModal(oportunidadData) {
+  removeModal();
+
+  const consec = oportunidadData?.Consecutivo_oportunidad ?? oportunidadData?.Codigo;
+  if (!consec) {
+    showToast('No fue posible identificar la oportunidad. Recargue el panel.', 'error');
+    return;
+  }
+  const defaultName = oportunidadData?.Nombre_oportunidad
+    || oportunidadData?.Numero_identificacion_oportunidad
+    || 'Negocio';
+
+  const overlay = el('div', 'q10-modal-overlay');
+  overlay.innerHTML = `
+    <div class="q10-modal">
+      <div class="q10-modal-header">
+        <span class="q10-modal-title">Crear Negocio</span>
+        <button class="q10-modal-close-btn">${icon('close')}</button>
+      </div>
+      <div class="q10-modal-body">
+        <p style="font-size:12px;color:#6B7280;margin:0 0 12px;">
+          Cada actividade no Q10 fica vinculada a um negocio dentro da oportunidad.
+        </p>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Nombre del negocio *</label>
+          <input class="q10-form-input" id="q10-neg-nombre" value="${htmlAttr(defaultName)}" placeholder="Ej: Curso Português A1">
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Estado inicial *</label>
+          <select class="q10-form-select" id="q10-neg-estado"><option value="">Carregando...</option></select>
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Valor (opcional)</label>
+          <input class="q10-form-input" id="q10-neg-valor" type="number" min="0" step="0.01" placeholder="0.00">
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Observaciones (opcional)</label>
+          <textarea class="q10-form-textarea" id="q10-neg-obs" placeholder="Notas internas..."></textarea>
+        </div>
+      </div>
+      <div class="q10-modal-footer">
+        <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
+        <button class="q10-btn q10-btn-cta" id="q10-neg-submit">Crear Negocio</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
+  overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
+
+  // Estados disponibles: pull /flujonegocios. Pre-select "Presentación" if
+  // present (typical first stage); otherwise the lowest-percentage state.
+  sendMsg('fetchFlujoNegocios').then(estados => {
+    const list = Array.isArray(estados) ? estados : (estados?.data || []);
+    const sel = document.getElementById('q10-neg-estado');
+    if (!sel) return;
+    if (!list.length) {
+      sel.innerHTML = '<option value="">— Não disponível —</option>';
+      return;
+    }
+    const presentacion = list.find(e =>
+      String(e.Nombre_estado_negocio || e.Nombre || '').toLowerCase().includes('presenta')
+    );
+    const initial = presentacion || list.find(e => e.Porcentaje > 0) || list[0];
+    sel.innerHTML = list.map(e => {
+      const id = e.Consecutivo_estado_negocio ?? e.Consecutivo;
+      const nombre = e.Nombre_estado_negocio || e.Nombre || ('Estado ' + id);
+      const isInitial = id === (initial?.Consecutivo_estado_negocio ?? initial?.Consecutivo);
+      return `<option value="${htmlAttr(id)}" ${isInitial ? 'selected' : ''}>${htmlText(nombre)}</option>`;
+    }).join('');
+  }).catch(() => {
+    const sel = document.getElementById('q10-neg-estado');
+    if (sel) sel.innerHTML = '<option value="">— Erro carregando estados —</option>';
+  });
+
+  document.getElementById('q10-neg-submit').addEventListener('click', async () => {
+    const nombre = document.getElementById('q10-neg-nombre').value.trim();
+    const estadoRaw = document.getElementById('q10-neg-estado').value;
+    const valorRaw = document.getElementById('q10-neg-valor').value;
+    const obs = document.getElementById('q10-neg-obs').value.trim();
+
+    if (!nombre) { showToast('Nombre del negocio es obligatorio', 'error'); return; }
+    if (!estadoRaw) { showToast('Estado es obligatorio', 'error'); return; }
+
+    const btn = document.getElementById('q10-neg-submit');
+    btn.disabled = true; btn.textContent = 'Creando...';
+    try {
+      const reqBody = {
+        Consecutivo_oportunidad: parseInt(consec, 10),
+        Nombre_negocio: nombre,
+        Consecutivo_estado_negocio: parseInt(estadoRaw, 10),
+      };
+      if (valorRaw) reqBody.Valor = parseFloat(valorRaw);
+      if (obs) reqBody.Observaciones = obs;
+
+      await sendMsg('createNegocio', { body: reqBody });
+      showToast('Negocio creado ✓', 'success');
+      await sendMsg('clearCache').catch(() => {});
+      removeModal();
+      if (currentPhone) searchPhone(currentPhone);
+    } catch (err) {
+      showToast(err.message || 'Error creando negocio', 'error');
+      btn.disabled = false; btn.textContent = 'Crear Negocio';
+    }
+  });
+}
+
 export function showCreateActividadModal(contactData) {
   removeModal();
   const overlay = el('div', 'q10-modal-overlay');
@@ -857,7 +967,10 @@ export function bindOportunidadActions(d) {
   document.getElementById('q10-start-enrollment')?.addEventListener('click', () => {
     startEnrollmentWizard(d.Celular || d.Telefono || currentPhone, d);
   });
+  // Either Registrar Actividad or Crear Negocio is rendered, never both
+  // (renderOportunidad picks based on whether negocios exist).
   document.getElementById('q10-log-activity')?.addEventListener('click', () => showCreateActividadModal(d));
+  document.getElementById('q10-create-negocio')?.addEventListener('click', () => showCreateNegocioModal(d));
   document.getElementById('q10-view-q10')?.addEventListener('click', () => window.open('https://app.q10.com', '_blank'));
 }
 

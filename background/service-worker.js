@@ -471,6 +471,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         apiGet('/medioscontacto', { Estado: true }).catch(() => [])
       ]).then(([pub, ctc]) => ({ mediospublicitarios: pub, medioscontacto: ctc })));
 
+    case 'fetchFlujoNegocios':
+      // Pipeline states for negocios. Used to populate the initial-state
+      // dropdown when creating a negocio (e.g. Presentación, En negociación).
+      return handle(apiGet('/flujonegocios', { Estado: true }));
+
+    case 'createNegocio':
+      return handle((async () => {
+        const body = { ...msg.body };
+        if (!body.Numero_identificacion_asesor) {
+          const asesorId = await getAsesorId();
+          if (asesorId) body.Numero_identificacion_asesor = asesorId;
+        }
+        const result = await apiPost('/negocios', body);
+        cache.clear();
+        return result;
+      })());
+
     case 'createActividad':
       // BUG-03 fix: POST /actividades expects Consecutivo_negocio, Estado_actividad,
       // Tipo_actividad, Numero_identificacion_asesor, Fecha_actividad. Asesor ID is

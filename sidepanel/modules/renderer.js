@@ -292,9 +292,19 @@ export function renderOportunidad(result) {
     <div id="q10-tags-notes-container"></div>
   `;
 
+  // Activity logging requires a Negocio. Q10 normally auto-creates one with
+  // each oportunidade, but if for any reason this oportunidad has none we
+  // surface a "Crear Negocio" CTA instead of "Registrar Actividad" so the
+  // user has a clear next step (otherwise the activity modal would open and
+  // immediately ask them to create a negocio in Q10's web UI).
+  const hasNegocios = Array.isArray(result.negocios) && result.negocios.length > 0;
+  const negocioOrActivityBtn = hasNegocios
+    ? `<button class="q10-btn q10-btn-success" id="q10-log-activity">${icon('clipboard','q10-btn-icon')} Registrar Actividad</button>`
+    : `<button class="q10-btn q10-btn-success" id="q10-create-negocio">${icon('briefcase','q10-btn-icon')} Crear Negocio</button>`;
+
   showActions(`
     <button class="q10-btn q10-btn-cta" id="q10-start-enrollment">${icon('graduation','q10-btn-icon')} Matricular Alumno</button>
-    <button class="q10-btn q10-btn-success" id="q10-log-activity">${icon('clipboard','q10-btn-icon')} Registrar Actividad</button>
+    ${negocioOrActivityBtn}
     <button class="q10-btn q10-btn-secondary" id="q10-export-data">${icon('clipboard','q10-btn-icon')} Exportar Datos</button>
     <button class="q10-btn q10-btn-secondary" id="q10-export-chat">${icon('fileText','q10-btn-icon')} Exportar Chat</button>
     <button class="q10-btn q10-btn-outline" id="q10-view-q10">${icon('externalLink','q10-btn-icon')} Ver en Q10</button>
