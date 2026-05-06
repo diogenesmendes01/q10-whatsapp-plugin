@@ -61,6 +61,29 @@
   }
 
   /**
+   * Resolve a LID Wid to its real phone number using WhatsApp's internal
+   * lidPnCache module. Returns the cleaned phone string or null. The cache
+   * is populated as the user receives messages — works for any chat WA has
+   * already linked to a phone in this session.
+   */
+  function resolveLidToPhone(lidWid) {
+    if (!lidWid) return null;
+    try {
+      var importNs = (typeof window.importNamespace === 'function') ? window.importNamespace
+                   : (typeof window.require === 'function') ? window.require : null;
+      if (!importNs) return null;
+      var mod = importNs('WAWebApiContact');
+      if (!mod) return null;
+      var cache = mod.lidPnCache || (mod.default && mod.default.lidPnCache);
+      if (!cache || typeof cache.getPhoneNumber !== 'function') return null;
+      var pnWid = cache.getPhoneNumber(lidWid);
+      if (!pnWid) return null;
+      var serialized = pnWid._serialized || (pnWid.toString && pnWid.toString());
+      return cleanPhone(serialized);
+    } catch (_) { return null; }
+  }
+
+  /**
    * Format a Store chat model into the Q10 data shape.
    */
   function formatChatData(chat, adapter) {
@@ -68,9 +91,12 @@
       var id = chat.id && chat.id._serialized ? chat.id._serialized : (chat.id && chat.id.toString ? chat.id.toString() : '');
       var isGroup = id.endsWith('@g.us');
 
-      // Phone resolution. Try the chat id first; if it's an @lid identifier,
-      // fall back to the linked contact's id (which is usually @c.us). Modern
-      // WA assigns LID to many chats — only the contact carries the phone.
+      // Phone resolution priority (modern WA hides phone behind LIDs):
+      //   1) chat.id has @c.us → phone is right there
+      //   2) chat.contact.id has @c.us → linked contact carries the phone
+      //   3) WAWebApiContact.lidPnCache.getPhoneNumber(chat.id) → WA's
+      //      internal LID→PN map (works on chats WA has already received
+      //      messages from in this session)
       var phone = null;
       if (!isGroup) {
         phone = cleanPhone(id);
@@ -78,12 +104,12 @@
           var cId = chat.contact.id;
           var cIdStr = cId && cId._serialized ? cId._serialized : (cId && cId.toString ? cId.toString() : '');
           phone = cleanPhone(cIdStr);
-          if (!phone && chat.contact.userid) {
-            phone = cleanPhone(String(chat.contact.userid));
-          }
-          if (!phone && chat.contact.phoneNumber) {
-            phone = cleanPhone(String(chat.contact.phoneNumber));
-          }
+          if (!phone && chat.contact.userid) phone = cleanPhone(String(chat.contact.userid));
+          if (!phone && chat.contact.phoneNumber) phone = cleanPhone(String(chat.contact.phoneNumber));
+        }
+        if (!phone && id.endsWith('@lid')) {
+          phone = resolveLidToPhone(chat.id);
+          if (phone) console.log(TAG, 'resolved LID', id, '→', phone);
         }
       }
 
@@ -229,6 +255,10 @@
             var chat = adapter.getChatById(chatId);
             if (chat && chat.contact && chat.contact.id) {
               phone = cleanPhone(chat.contact.id._serialized || chat.contact.id.toString());
+            }
+            if (!phone && chat && chat.id) {
+              phone = resolveLidToPhone(chat.id);
+              if (phone) console.log(TAG, 'DOM fallback resolved LID', chatId, '→', phone);
             }
           }
         } catch (_) { /* skip */ }
@@ -509,11 +539,14 @@
                 // Try multiple sources to find the phone number.
                 // Modern WA Web identifies many chats by LID (e.g. "12345@lid")
                 // instead of @c.us; the phone lives on the linked contact in
-                // that case.
+                // that case OR in WA's internal lidPnCache.
                 var phone = phoneFromWid(c.id)
                   || phoneFromWid(c.contact && c.contact.id)
                   || phoneFromUserid(c.contact && c.contact.userid)
                   || phoneFromUserid(c.contact && c.contact.phoneNumber);
+                if (!phone && rawId.endsWith('@lid')) {
+                  phone = resolveLidToPhone(c.id);
+                }
 
                 if (!phone) { skippedNoPhone++; continue; }
 
