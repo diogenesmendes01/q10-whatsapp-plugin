@@ -335,8 +335,21 @@ export function showGenerarCobroModal(studentData) {
 export function showCreateOportunidadModal(phone, detectedName = null, contactData = null) {
   removeModal();
   const prefillName = detectedName || (contactData ? [contactData.Nombres || contactData.Primer_nombre, contactData.Apellidos || contactData.Primer_apellido].filter(Boolean).join(' ') : '');
-  const prefillPhone = (phone || contactData?.Celular || '').replace(/\D/g,'').slice(-12);
-  const prefillEmail = contactData?.Email || contactData?.Correo_electronico || '';
+
+  // Phone priority: Q10's stored phone first (it's authoritative), then the
+  // WA-detected phone, then any nested Detalle entry. We also accept the
+  // structured Detalle[] array in case top-level Celular is missing.
+  const detalleCelular = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Celular')?.Descripcion;
+  const prefillPhone = String(
+    contactData?.Celular ||
+    contactData?.Telefono ||
+    detalleCelular ||
+    phone ||
+    ''
+  ).replace(/\D/g, '');
+
+  const detalleEmail = (contactData?.Detalle || []).find(d => d.Tipo_detalle === 'Email')?.Descripcion;
+  const prefillEmail = contactData?.Email || contactData?.Correo_electronico || detalleEmail || '';
 
   const overlay = el('div', 'q10-modal-overlay');
   overlay.innerHTML = `
