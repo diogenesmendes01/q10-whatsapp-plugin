@@ -256,6 +256,46 @@ async function searchContacts({ phone, name }) {
     console.warn('[Q10] Error searching contactos:', e.message);
   }
 
+  // 3. Search oportunidades. /oportunidades requires Fecha_inicio +
+  // Fecha_fin filters; cover the last 2 years which is enough for active
+  // leads. We also pull the related negocios + recent actividades so the
+  // sidepanel can render the full lead view in one request batch.
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86400000).toISOString().split('T')[0];
+    const oportunidades = await apiGet('/oportunidades', { Fecha_inicio: twoYearsAgo, Fecha_fin: today });
+    const _opps = normalizeList(oportunidades);
+    const match = _opps.find(matchFn);
+    if (match) {
+      results.type = 'oportunidad';
+      results.data = match;
+      const consec = match.Consecutivo_oportunidad ?? match.Consecutivo;
+      if (consec) {
+        try {
+          const negocios = await apiGet('/negocios', { Consecutivo_oportunidad: consec });
+          results.negocios = normalizeList(negocios);
+          // Pull recent activities for each negocio (capped to keep the
+          // payload small).
+          const acts = [];
+          for (const n of results.negocios.slice(0, 3)) {
+            const cn = n.Consecutivo_negocio ?? n.Consecutivo;
+            if (!cn) continue;
+            try {
+              const list = await apiGet('/actividades', { Consecutivo_negocio: cn });
+              acts.push(...normalizeList(list));
+            } catch (_) {}
+          }
+          results.actividades = acts.slice(0, 10);
+        } catch (e) {
+          console.warn('[Q10] Error fetching negocios/actividades:', e.message);
+        }
+      }
+      return results;
+    }
+  } catch (e) {
+    console.warn('[Q10] Error searching oportunidades:', e.message);
+  }
+
   return results;
 }
 
@@ -410,7 +450,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const asesorId = await getAsesorId();
           if (asesorId) body.Numero_identificacion_asesor = asesorId;
         }
-        return apiPost('/oportunidades', body);
+        const result = await apiPost('/oportunidades', body);
+        // Invalidate the API cache so the next searchByPhone hits a fresh
+        // /oportunidades response and surfaces the just-created lead.
+        cache.clear();
+        return result;
       })());
 
     case 'fetchMedios':

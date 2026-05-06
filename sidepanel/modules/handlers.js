@@ -530,7 +530,10 @@ export function showCreateOportunidadModal(phone, detectedName = null, contactDa
         }
         await sendMsg('createOportunidad', { body: reqBody });
         showToast('Lead registrado en Q10 ✓', 'success');
-        sendMsg('clearCache').catch(() => {});
+        // Await cache clear so the immediate searchPhone below hits a fresh
+        // /oportunidades — otherwise the panel re-renders the unknown card
+        // and the user thinks the lead wasn't created.
+        await sendMsg('clearCache').catch(() => {});
         if (currentPhone) searchPhone(currentPhone);
         else restoreView();
       } catch (err) {
