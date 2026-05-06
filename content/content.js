@@ -46,8 +46,25 @@
     }
 
     try {
-      const script = document.createElement('script');
-      // Load loader.js first (finds WhatsApp Store)
+      // Inject store-adapter.js DIRECTLY from the content script. WhatsApp's
+      // CSP silently blocks chrome-extension:// URLs added to <script> tags
+      // from inside the page context, so loader.js's attempt to inject the
+      // adapter fails without firing onload OR onerror. Doing it from the
+      // content script (privileged context) bypasses the block.
+      const adapter = document.createElement('script');
+      adapter.src = chrome.runtime.getURL('inject/store-adapter.js');
+      adapter.type = 'text/javascript';
+      adapter.onload = () => {
+        log('store-adapter.js loaded into page context.');
+        adapter.remove();
+      };
+      adapter.onerror = (e) => {
+        warn('Failed to load store-adapter.js.', e);
+        adapter.remove();
+      };
+      (document.head || document.documentElement).appendChild(adapter);
+
+      // loader.js (kept for the adapter-readiness signaling logic only).
       const loader = document.createElement('script');
       loader.src = chrome.runtime.getURL('inject/loader.js');
       loader.type = 'text/javascript';
@@ -56,8 +73,9 @@
         loader.remove();
       };
       (document.head || document.documentElement).appendChild(loader);
-      
-      // Then load inject.js (uses Store for chat detection)
+
+      // inject.js (uses Store for chat detection)
+      const script = document.createElement('script');
       script.src = chrome.runtime.getURL('inject/inject.js');
       script.type = 'text/javascript';
 
@@ -65,7 +83,7 @@
         injected = true;
         injectLoaded = true;
         log('inject.js loaded successfully into page context.');
-        script.remove(); // Clean up DOM
+        script.remove();
       };
 
       script.onerror = (e) => {

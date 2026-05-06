@@ -102,6 +102,14 @@
   'use strict';
 
   const TAG = '[Q10 StoreAdapter]';
+
+  // Re-injection guard: content.js may inject this script earlier than the
+  // legacy loader.js path, so loader.js's attempt becomes a no-op.
+  if (global.Q10StoreAdapter) {
+    console.log(TAG, 'Already initialized, skipping re-init.');
+    return;
+  }
+
   var CONSECUTIVE_ERROR_THRESHOLD = 3;
 
   // ──────────────────────────────────────────────────────────────
