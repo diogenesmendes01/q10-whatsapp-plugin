@@ -502,8 +502,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       })());
 
     case 'updateNegocio':
+      // Q10 documented this as POST /Negocio/Actualizar (legacy capitalized
+      // path style). Falls back to PATCH /negocios if the legacy endpoint
+      // returns 404 — covers tenants where only one of the two is wired up.
       return handle((async () => {
-        const result = await apiPatch('/negocios', msg.body);
+        let result;
+        try {
+          result = await apiPost('/Negocio/Actualizar', msg.body);
+        } catch (e) {
+          if (/API\s+404/i.test(e.message || '')) {
+            result = await apiPatch('/negocios', msg.body);
+          } else {
+            throw e;
+          }
+        }
         cache.clear();
         return result;
       })());
