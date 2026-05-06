@@ -239,17 +239,75 @@ export function renderOportunidad(result) {
   const celular = d.Celular || '';
   const estado = d.Nombre_estado_oportunidad || d.Estado_oportunidad || d.Estado || d.Etapa || d.Nombre_estado_negocio || '';
 
+  // Pipeline stepper for each negocio. Mirrors Q10's web UI but vertical
+  // since the side panel is narrow. States come from /flujonegocios; we
+  // sort by Porcentaje (0=Perdido at start; 100=Ganado at end) and skip
+  // the terminal ones in the visible stepper — they're collapsed into a
+  // single "Finalizar" entry that opens the Ganado/Perdido picker.
   let negociosHtml = '';
   if (result.negocios && result.negocios.length > 0) {
+    const flujo = (result.flujonegocios || [])
+      .slice()
+      .sort((a, b) => (a.Porcentaje || 0) - (b.Porcentaje || 0));
+    const nonTerminal = flujo.filter(s => (s.Porcentaje || 0) > 0 && (s.Porcentaje || 0) < 100);
+    const ganadoState = flujo.find(s => (s.Porcentaje || 0) === 100);
+
     negociosHtml = `
       <div class="q10-section">
         <div class="q10-section-title">${icon('briefcase','q10-section-icon')} Negocios</div>
-        ${result.negocios.map(n => `
-          <div class="q10-info-card">
-            <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${htmlText(n.Nombre_negocio || n.Nombre || n.Descripcion || ('Negocio ' + (n.Consecutivo_negocio ?? '')))}</span></div>
-            ${n.Valor != null ? `<div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${fmtMoney(n.Valor)}</span></div>` : ''}
-            <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${htmlText(n.Nombre_estado_negocio || n.Estado_negocio || n.Estado || '—')}</span></span></div>
-          </div>`).join('')}
+        ${result.negocios.map(n => {
+          const negocioId = n.Consecutivo_negocio ?? n.Consecutivo;
+          const negocioName = htmlText(n.Nombre_negocio || n.Nombre || n.Descripcion || ('Negocio ' + (negocioId ?? '')));
+          const currentEstado = n.Consecutivo_estado_negocio;
+          const currentPct = (flujo.find(s => s.Consecutivo_estado_negocio === currentEstado)?.Porcentaje) ?? 0;
+          const programa = n.Nombre_programa || n.Programa || (n.Codigo_programa || '');
+          const fecha = n.Fecha_tentativa_cierre ? fmtDate(n.Fecha_tentativa_cierre) : '';
+          const valor = n.Valor != null ? fmtMoney(n.Valor) : '';
+          const isClosed = currentPct === 100 || currentPct === 0;
+
+          // Build step rows: non-terminals + Finalizar entry at the end.
+          const steps = nonTerminal.map(s => ({
+            id: s.Consecutivo_estado_negocio,
+            name: s.Nombre_estado_negocio || s.Nombre || ('Estado ' + s.Consecutivo_estado_negocio),
+            pct: s.Porcentaje || 0,
+            type: 'state',
+          }));
+          steps.push({ id: 'finalize', name: 'Finalizar', pct: 100, type: 'finalize' });
+
+          const stepsHtml = steps.map((s, idx) => {
+            const isCurrent = s.type === 'state' && s.id === currentEstado;
+            const isPast = s.type === 'state' && (s.pct < currentPct);
+            const isWonFinal = s.type === 'finalize' && currentPct === 100;
+            const stateClass = isCurrent ? 'current' : (isPast || isWonFinal) ? 'done' : 'pending';
+            const dataAttrs = s.type === 'state'
+              ? `data-q10-action="change-estado" data-negocio="${negocioId}" data-estado="${s.id}"`
+              : `data-q10-action="finalize-negocio" data-negocio="${negocioId}"`;
+            const isClickable = !isClosed && !isCurrent;
+            return `
+              <div class="q10-pipe-step q10-pipe-${stateClass}" ${isClickable ? `${dataAttrs} role="button" tabindex="0"` : ''} style="cursor:${isClickable ? 'pointer' : 'default'};">
+                <div class="q10-pipe-bullet"></div>
+                <div class="q10-pipe-label">${htmlText(s.name)}</div>
+                ${idx < steps.length - 1 ? `<div class="q10-pipe-line ${isPast ? 'done' : ''}"></div>` : ''}
+              </div>`;
+          }).join('');
+
+          const lostStateName = currentPct === 0 && currentEstado ? (flujo.find(s => s.Consecutivo_estado_negocio === currentEstado)?.Nombre_estado_negocio || 'Perdido') : null;
+
+          return `
+            <div class="q10-info-card" style="position:relative;">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+                <div style="font-weight:600;font-size:13px;color:#111;">${negocioName}</div>
+                <button class="q10-link-btn" data-q10-action="edit-negocio" data-negocio="${negocioId}" style="font-size:11px;color:#0EA5E9;background:none;border:none;cursor:pointer;padding:2px 6px;">✎ Editar</button>
+              </div>
+              ${programa ? `<div class="q10-info-row"><span class="q10-info-label">Programa</span><span class="q10-info-value">${htmlText(programa)}</span></div>` : ''}
+              ${fecha ? `<div class="q10-info-row"><span class="q10-info-label">Fecha cierre</span><span class="q10-info-value">${fecha}</span></div>` : ''}
+              ${valor ? `<div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${valor}</span></div>` : ''}
+              ${isClosed
+                ? `<div style="margin-top:10px;padding:8px;background:${currentPct === 100 ? '#ECFDF5' : '#FEF2F2'};border-radius:8px;text-align:center;font-weight:600;color:${currentPct === 100 ? '#065F46' : '#991B1B'};font-size:13px;">${currentPct === 100 ? '✓ Ganado' : '✗ ' + htmlText(lostStateName || 'Perdido')}</div>`
+                : `<div class="q10-pipe-stepper" style="margin-top:12px;">${stepsHtml}</div>`
+              }
+            </div>`;
+        }).join('')}
       </div>`;
   }
 

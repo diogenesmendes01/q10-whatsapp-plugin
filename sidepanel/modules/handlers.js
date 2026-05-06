@@ -645,6 +645,214 @@ export function showCreateContactoModal(phone, detectedName = null) {
   });
 }
 
+// ----------------------------------------------------------------
+// Finalizar negocio popover — appears next to the "Finalizar" pipeline
+// step and offers Ganado / Perdido buttons (mimics Q10's web UI).
+// ----------------------------------------------------------------
+function showFinalizarNegocioPopover(negocioId, anchorEl) {
+  document.querySelector('.q10-finalize-pop')?.remove();
+  const pop = el('div', 'q10-finalize-pop');
+  pop.innerHTML = `
+    <div class="q10-finalize-pop-header">
+      <span>Finalizar negocio</span>
+      <button class="q10-finalize-close" type="button">&times;</button>
+    </div>
+    <div class="q10-finalize-pop-buttons">
+      <button class="q10-finalize-btn q10-finalize-btn-ganado" data-finalize="ganado">
+        <span style="font-size:18px;">✓</span> Ganado
+      </button>
+      <button class="q10-finalize-btn q10-finalize-btn-perdido" data-finalize="perdido">
+        <span style="font-size:18px;">✗</span> Perdido
+      </button>
+    </div>
+  `;
+  document.body.appendChild(pop);
+
+  // Position near the anchor (left of the side panel, above the step).
+  const rect = anchorEl.getBoundingClientRect();
+  const popHeight = 140;
+  pop.style.left = Math.max(8, rect.left - 220) + 'px';
+  pop.style.top = Math.max(8, rect.top - popHeight) + 'px';
+
+  const close = () => pop.remove();
+  pop.querySelector('.q10-finalize-close').addEventListener('click', close);
+  // Click outside closes.
+  setTimeout(() => {
+    document.addEventListener('click', function onDocClick(e) {
+      if (!pop.contains(e.target)) { close(); document.removeEventListener('click', onDocClick); }
+    });
+  }, 0);
+
+  pop.querySelector('[data-finalize="ganado"]').addEventListener('click', async () => {
+    close();
+    try {
+      await sendMsg('ganarNegocio', { body: { Consecutivo_negocio: negocioId } });
+      showToast('Negocio marcado como Ganado ✓', 'success');
+      await sendMsg('clearCache').catch(() => {});
+      if (currentPhone) searchPhone(currentPhone);
+    } catch (err) {
+      showToast(err.message || 'Error finalizando negocio', 'error');
+    }
+  });
+
+  pop.querySelector('[data-finalize="perdido"]').addEventListener('click', () => {
+    close();
+    showPerderCausaModal(negocioId);
+  });
+}
+
+function showPerderCausaModal(negocioId) {
+  removeModal();
+  const overlay = el('div', 'q10-modal-overlay');
+  overlay.innerHTML = `
+    <div class="q10-modal" style="max-width:340px;">
+      <div class="q10-modal-header">
+        <span class="q10-modal-title">Marcar como Perdido</span>
+        <button class="q10-modal-close-btn">${icon('close')}</button>
+      </div>
+      <div class="q10-modal-body">
+        <div class="q10-form-group">
+          <label class="q10-form-label">Causa de pérdida *</label>
+          <select class="q10-form-select" id="q10-perder-causa"><option value="">Cargando...</option></select>
+        </div>
+      </div>
+      <div class="q10-modal-footer">
+        <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
+        <button class="q10-btn" style="background:#EF4444;color:#fff;" id="q10-perder-submit">Marcar Perdido</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
+  overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
+
+  sendMsg('fetchCausas').then(causas => {
+    const list = Array.isArray(causas) ? causas : (causas?.data || []);
+    const sel = document.getElementById('q10-perder-causa');
+    if (!sel) return;
+    if (!list.length) {
+      sel.innerHTML = '<option value="">— No hay causas configuradas —</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Selecciona —</option>' +
+      list.map(c => {
+        const id = c.Consecutivo_causa ?? c.Consecutivo;
+        const nombre = c.Nombre_causa || c.Nombre || ('Causa ' + id);
+        return `<option value="${htmlAttr(id)}">${htmlText(nombre)}</option>`;
+      }).join('');
+  }).catch(() => {
+    const sel = document.getElementById('q10-perder-causa');
+    if (sel) sel.innerHTML = '<option value="">— Error cargando causas —</option>';
+  });
+
+  document.getElementById('q10-perder-submit').addEventListener('click', async () => {
+    const causa = parseInt(document.getElementById('q10-perder-causa').value || '0', 10);
+    if (!causa) { showToast('Causa es obligatoria', 'error'); return; }
+    const btn = document.getElementById('q10-perder-submit');
+    btn.disabled = true; btn.textContent = 'Marcando...';
+    try {
+      await sendMsg('perderNegocio', { body: {
+        Consecutivo_negocio: negocioId,
+        Consecutivo_causa_perdida: causa,
+      }});
+      showToast('Negocio marcado como Perdido', 'info');
+      await sendMsg('clearCache').catch(() => {});
+      removeModal();
+      if (currentPhone) searchPhone(currentPhone);
+    } catch (err) {
+      showToast(err.message || 'Error marcando perdido', 'error');
+      btn.disabled = false; btn.textContent = 'Marcar Perdido';
+    }
+  });
+}
+
+// ----------------------------------------------------------------
+// Editar negocio — pre-fills the same form as Crear with the current
+// values, sends PATCH /negocios on submit.
+// ----------------------------------------------------------------
+function showEditNegocioModal(negocio, oportunidadConsec) {
+  removeModal();
+  const consec = negocio.Consecutivo_negocio ?? negocio.Consecutivo;
+  const overlay = el('div', 'q10-modal-overlay');
+  overlay.innerHTML = `
+    <div class="q10-modal">
+      <div class="q10-modal-header">
+        <span class="q10-modal-title">Editar Negocio</span>
+        <button class="q10-modal-close-btn">${icon('close')}</button>
+      </div>
+      <div class="q10-modal-body">
+        <div class="q10-form-group">
+          <label class="q10-form-label">Nombre del negocio *</label>
+          <input class="q10-form-input" id="q10-edn-nombre" value="${htmlAttr(negocio.Nombre_negocio || negocio.Nombre || '')}">
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Programa</label>
+          <select class="q10-form-select" id="q10-edn-programa"><option value="">Cargando...</option></select>
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Fecha tentativa de cierre</label>
+          <input class="q10-form-input" id="q10-edn-fecha" type="date" value="${htmlAttr(negocio.Fecha_tentativa_cierre || '')}">
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Valor</label>
+          <input class="q10-form-input" id="q10-edn-valor" type="number" min="0" step="0.01" value="${htmlAttr(negocio.Valor ?? '')}">
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Observaciones</label>
+          <textarea class="q10-form-textarea" id="q10-edn-obs">${htmlText(negocio.Observaciones || '')}</textarea>
+        </div>
+      </div>
+      <div class="q10-modal-footer">
+        <button class="q10-btn q10-btn-outline q10-modal-cancel">Cancelar</button>
+        <button class="q10-btn q10-btn-cta" id="q10-edn-submit">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
+  overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
+
+  // Programa dropdown — same logic as Crear Negocio.
+  const fillProgs = (programas) => {
+    const sel = document.getElementById('q10-edn-programa');
+    if (!sel) return;
+    if (!programas?.length) { sel.innerHTML = '<option value="">— Não disponível —</option>'; return; }
+    sel.innerHTML = '<option value="">— Selecciona —</option>' + programas.map(p => {
+      const isSelected = p.Codigo === negocio.Codigo_programa;
+      return `<option value="${htmlAttr(p.Codigo)}" ${isSelected ? 'selected' : ''}>${htmlText(p.Nombre || p.Codigo)}</option>`;
+    }).join('');
+  };
+  if (catalogsCache?.programas?.length) fillProgs(catalogsCache.programas);
+  else sendMsg('fetchCatalogs').then(c => { setCatalogsCache(c); fillProgs(c?.programas || []); }).catch(() => fillProgs([]));
+
+  document.getElementById('q10-edn-submit').addEventListener('click', async () => {
+    const nombre = document.getElementById('q10-edn-nombre').value.trim();
+    const programa = document.getElementById('q10-edn-programa').value;
+    const fecha = document.getElementById('q10-edn-fecha').value;
+    const valorRaw = document.getElementById('q10-edn-valor').value;
+    const obs = document.getElementById('q10-edn-obs').value.trim();
+    if (!nombre) { showToast('Nombre es obligatorio', 'error'); return; }
+
+    const btn = document.getElementById('q10-edn-submit');
+    btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      const reqBody = { Consecutivo_negocio: consec, Nombre_negocio: nombre };
+      if (programa) reqBody.Codigo_programa = programa;
+      if (fecha) reqBody.Fecha_tentativa_cierre = fecha;
+      if (valorRaw) reqBody.Valor = parseFloat(valorRaw);
+      if (obs) reqBody.Observaciones = obs;
+      await sendMsg('updateNegocio', { body: reqBody });
+      showToast('Negocio actualizado ✓', 'success');
+      await sendMsg('clearCache').catch(() => {});
+      removeModal();
+      if (currentPhone) searchPhone(currentPhone);
+    } catch (err) {
+      showToast(err.message || 'Error actualizando negocio', 'error');
+      btn.disabled = false; btn.textContent = 'Guardar';
+    }
+  });
+}
+
 // Modal for creating a Negocio inside an existing Oportunidad. Required
 // step before the user can register actividades — Q10 normally auto-creates
 // one with the oportunidad but some configs don't.
@@ -682,6 +890,11 @@ export function showCreateNegocioModal(oportunidadData) {
         <div class="q10-form-group">
           <label class="q10-form-label">Estado inicial *</label>
           <select class="q10-form-select" id="q10-neg-estado"><option value="">Carregando...</option></select>
+        </div>
+        <div class="q10-form-group">
+          <label class="q10-form-label">Fecha tentativa de cierre</label>
+          <input class="q10-form-input" id="q10-neg-fecha" type="date" value="${htmlAttr((() => { const d = new Date(); d.setDate(d.getDate() + 14); return d.toISOString().split('T')[0]; })())}">
+          <p style="font-size:11px;color:#6B7280;margin:4px 0 0">Padrão: 2 semanas a partir de hoje. Ajuste se necessário.</p>
         </div>
         <div class="q10-form-group">
           <label class="q10-form-label">Valor (opcional)</label>
@@ -760,6 +973,7 @@ export function showCreateNegocioModal(oportunidadData) {
     const nombre = document.getElementById('q10-neg-nombre').value.trim();
     const programa = document.getElementById('q10-neg-programa').value;
     const estadoRaw = document.getElementById('q10-neg-estado').value;
+    const fecha = document.getElementById('q10-neg-fecha').value;
     const valorRaw = document.getElementById('q10-neg-valor').value;
     const obs = document.getElementById('q10-neg-obs').value.trim();
 
@@ -776,6 +990,7 @@ export function showCreateNegocioModal(oportunidadData) {
         Codigo_programa: programa,
         Consecutivo_estado_negocio: parseInt(estadoRaw, 10),
       };
+      if (fecha) reqBody.Fecha_tentativa_cierre = fecha;
       if (valorRaw) reqBody.Valor = parseFloat(valorRaw);
       if (obs) reqBody.Observaciones = obs;
 
@@ -1005,6 +1220,45 @@ export function bindOportunidadActions(d) {
   // (renderOportunidad picks based on whether negocios exist).
   document.getElementById('q10-log-activity')?.addEventListener('click', () => showCreateActividadModal(d));
   document.getElementById('q10-create-negocio')?.addEventListener('click', () => showCreateNegocioModal(d));
+
+  // Delegated handler for pipeline interactions inside the body. Each
+  // navigation re-binds, so we abort the previous listener to avoid
+  // accumulating duplicates that would fire multiple PATCHes per click.
+  window.__q10OppAbortCtl?.abort();
+  window.__q10OppAbortCtl = new AbortController();
+  body().addEventListener('click', async (ev) => {
+    const target = ev.target.closest('[data-q10-action]');
+    if (!target) return;
+    const action = target.getAttribute('data-q10-action');
+    const negocioId = parseInt(target.getAttribute('data-negocio') || '0', 10);
+    if (!negocioId) return;
+    // Always read from the latest currentResult so a freshly-refreshed view
+    // (e.g. right after a state change) sees the new data.
+    const latestNegocios = currentResult?.negocios || d._negocios || [];
+    const negocio = latestNegocios.find(n => (n.Consecutivo_negocio ?? n.Consecutivo) === negocioId);
+
+    if (action === 'change-estado') {
+      const newEstado = parseInt(target.getAttribute('data-estado') || '0', 10);
+      if (!newEstado) return;
+      target.style.opacity = '0.5';
+      try {
+        await sendMsg('changeNegocioEstado', { body: {
+          Consecutivo_negocio: negocioId,
+          Consecutivo_estado_negocio: newEstado,
+        }});
+        showToast('Estado actualizado ✓', 'success');
+        await sendMsg('clearCache').catch(() => {});
+        if (currentPhone) searchPhone(currentPhone);
+      } catch (err) {
+        showToast(err.message || 'Error cambiando estado', 'error');
+        target.style.opacity = '';
+      }
+    } else if (action === 'finalize-negocio') {
+      showFinalizarNegocioPopover(negocioId, target);
+    } else if (action === 'edit-negocio') {
+      if (negocio) showEditNegocioModal(negocio, currentResult?.data?.Consecutivo_oportunidad ?? d.Consecutivo_oportunidad);
+    }
+  }, { signal: window.__q10OppAbortCtl.signal });
 }
 
 export function bindContactoActions(data) {

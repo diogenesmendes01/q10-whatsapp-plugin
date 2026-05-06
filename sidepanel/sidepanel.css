@@ -591,6 +591,101 @@ body {
 
 .q10-step-line.done { background: #10B981; }
 
+/* ---------- Negocio pipeline stepper (vertical, in oportunidad card) ---------- */
+
+.q10-pipe-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.q10-pipe-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 6px 0 6px 4px;
+  min-height: 28px;
+}
+
+.q10-pipe-bullet {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid #D1D5DB;
+  background: #fff;
+  margin-right: 10px;
+  transition: all 0.2s;
+}
+
+.q10-pipe-label {
+  font-size: 12px; font-weight: 500; color: #6B7280;
+  transition: color 0.2s;
+}
+
+.q10-pipe-step.current .q10-pipe-bullet {
+  border-color: #0EA5E9;
+  background: #0EA5E9;
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.15);
+}
+.q10-pipe-step.current .q10-pipe-label { color: #0369A1; font-weight: 600; }
+
+.q10-pipe-step.done .q10-pipe-bullet {
+  border-color: #10B981;
+  background: #10B981;
+}
+.q10-pipe-step.done .q10-pipe-label { color: #047857; }
+
+.q10-pipe-step:not(.current):not(.done):hover[role="button"] .q10-pipe-bullet {
+  border-color: #0EA5E9;
+}
+.q10-pipe-step:not(.current):not(.done):hover[role="button"] .q10-pipe-label { color: #0EA5E9; }
+
+.q10-pipe-line {
+  position: absolute;
+  left: 11px;
+  top: 22px;
+  bottom: -6px;
+  width: 2px;
+  background: #E5E7EB;
+}
+.q10-pipe-line.done { background: #10B981; }
+
+/* ---------- Finalizar popover ---------- */
+
+.q10-finalize-pop {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 220px;
+}
+.q10-finalize-pop-header {
+  font-size: 12px; font-weight: 600;
+  color: #fff; background: #1E40AF;
+  margin: -12px -12px 0; padding: 8px 12px;
+  border-top-left-radius: 10px; border-top-right-radius: 10px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.q10-finalize-pop-header button {
+  background: none; border: none; color: #fff; cursor: pointer; font-size: 14px;
+}
+.q10-finalize-pop-buttons { display: flex; gap: 8px; }
+.q10-finalize-btn {
+  flex: 1; padding: 16px 8px; border-radius: 8px; border: 2px solid;
+  cursor: pointer; font-size: 12px; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: #fff;
+}
+.q10-finalize-btn-ganado { color: #10B981; border-color: #10B981; }
+.q10-finalize-btn-ganado:hover { background: #ECFDF5; }
+.q10-finalize-btn-perdido { color: #EF4444; border-color: #EF4444; }
+.q10-finalize-btn-perdido:hover { background: #FEF2F2; }
+
 /* ---------- Wizard form area ---------- */
 
 .q10-wizard-form { animation: q10-fade-in 0.3s ease; }

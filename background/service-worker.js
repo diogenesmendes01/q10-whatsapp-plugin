@@ -105,19 +105,19 @@ async function apiGet(endpoint, params = {}, opts = {}) {
   return data;
 }
 
-async function apiPost(endpoint, body) {
+async function apiSend(method, endpoint, body) {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error('API key não configurada. Configure a chave Q10 nas opções da extensão.');
 
   const base = await getApiBaseUrl();
   const url = `${base}${endpoint}`;
   const resp = await fetch(url, {
-    method: 'POST',
+    method,
     headers: {
       [authHeaderFor(base)]: apiKey,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(body)
+    body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!resp.ok) {
@@ -125,8 +125,15 @@ async function apiPost(endpoint, body) {
     throw new Error(`API ${resp.status}: ${text || resp.statusText}`);
   }
 
-  return resp.json();
+  // Some endpoints (state transitions) return 204 No Content; tolerate that.
+  const text = await resp.text();
+  if (!text) return { ok: true };
+  try { return JSON.parse(text); } catch { return text; }
 }
+
+async function apiPost(endpoint, body) { return apiSend('POST', endpoint, body); }
+async function apiPatch(endpoint, body) { return apiSend('PATCH', endpoint, body); }
+async function apiPut(endpoint, body) { return apiSend('PUT', endpoint, body); }
 
 // ---------- Phone normalization ----------
 
@@ -294,6 +301,12 @@ async function searchContacts({ phone, name }) {
             } catch (_) {}
           }
           results.actividades = acts.slice(0, 10);
+          // Pipeline states for the visual stepper rendered alongside each
+          // negocio. Cached server-side so we don't re-fetch on every render.
+          try {
+            const flujo = await apiGet('/flujonegocios', { Estado: true });
+            results.flujonegocios = normalizeList(flujo);
+          } catch (_) {}
         } catch (e) {
           console.warn('[Q10] Error fetching negocios/actividades:', e.message);
         }
@@ -484,6 +497,50 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           if (asesorId) body.Numero_identificacion_asesor = asesorId;
         }
         const result = await apiPost('/negocios', body);
+        cache.clear();
+        return result;
+      })());
+
+    case 'updateNegocio':
+      return handle((async () => {
+        const result = await apiPatch('/negocios', msg.body);
+        cache.clear();
+        return result;
+      })());
+
+    case 'changeNegocioEstado':
+      // Move a negocio between non-terminal pipeline stages.
+      // Q10 endpoint: PATCH /negocios/estado.
+      return handle((async () => {
+        const result = await apiPatch('/negocios/estado', msg.body);
+        cache.clear();
+        return result;
+      })());
+
+    case 'ganarNegocio':
+      // Mark negocio as won. Q10: PUT /negocios/estado/ganar.
+      return handle((async () => {
+        const result = await apiPut('/negocios/estado/ganar', msg.body);
+        cache.clear();
+        return result;
+      })());
+
+    case 'perderNegocio':
+      // Mark negocio as lost. Q10: PUT /negocios/estado/perder.
+      // Requires Consecutivo_causa_perdida (from /causas).
+      return handle((async () => {
+        const result = await apiPut('/negocios/estado/perder', msg.body);
+        cache.clear();
+        return result;
+      })());
+
+    case 'fetchCausas':
+      return handle(apiGet('/causas', { Estado: true }));
+
+    case 'updateOportunidad':
+      // PATCH /oportunidades — used by "Editar oportunidad" flow.
+      return handle((async () => {
+        const result = await apiPatch('/oportunidades', msg.body);
         cache.clear();
         return result;
       })());
