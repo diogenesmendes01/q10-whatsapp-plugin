@@ -233,7 +233,7 @@ export function searchPhone(phone) {
   renderLoading();
   const myToken = nextSearchToken();
 
-  chrome.runtime.sendMessage({ action: 'searchPhone', phone }, (resp) => {
+  chrome.runtime.sendMessage({ action: 'searchPhone', phone, name: currentContactName || null }, (resp) => {
     if (isStaleToken(myToken)) return;
     if (chrome.runtime.lastError) { renderError('Erro de comunicação. Recarregue a extensão.'); return; }
     if (!resp || !resp.ok) { renderError(resp?.error || 'Erro desconhecido.'); return; }

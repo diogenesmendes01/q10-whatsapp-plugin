@@ -159,10 +159,16 @@ function nameMatches(record, searchName) {
   if (!searchName) return false;
   const search = searchName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const parts = [
-    record.Primer_nombre,
+    record.Primer_nombre, record.Segundo_nombre,
     record.Primer_apellido, record.Segundo_apellido,
+    record.Nombres, record.Apellidos,
     record.Nombre, record.nombre,
-    record.Nombre_completo
+    record.Nombre_completo,
+    // Oportunidades carry the lead identification under Nombre_oportunidad \u2014
+    // important for falling back to name match when the list endpoint
+    // doesn't return phone fields we can compare against.
+    record.Nombre_oportunidad,
+    record.Numero_identificacion_oportunidad,
   ].filter(Boolean);
   const fullName = parts.join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!fullName) return false;
@@ -176,12 +182,15 @@ function nameMatches(record, searchName) {
 
 // ---------- Search logic ----------
 
-async function searchByPhone(phone) {
+async function searchByPhone(phone, name) {
   const normalized = normalizePhone(phone);
   if (!normalized || normalized.length < 8) {
     throw new Error('Número de telefone inválido.');
   }
-  return searchContacts({ phone: normalized });
+  // Pass the WA-detected name too so /oportunidades search has a fallback
+  // when Q10's list endpoint doesn't include the phone in the response shape
+  // we expect — name match catches those.
+  return searchContacts({ phone: normalized, name: name || null });
 }
 
 async function searchByName(name) {
@@ -194,13 +203,12 @@ async function searchByName(name) {
 async function searchContacts({ phone, name }) {
   const results = { type: 'unknown', phone: phone || null, name: name || null, data: null };
 
+  // Match by phone first (when given), then fall back to name. Q10's list
+  // endpoints sometimes return abbreviated records (no phone fields), so a
+  // name fallback rescues the lookup as long as we have a name from WA.
   const matchFn = (record) => {
-    if (phone) {
-      return phoneMatches(record.Telefono, phone) || phoneMatches(record.Celular, phone);
-    }
-    if (name) {
-      return nameMatches(record, name);
-    }
+    if (phone && (phoneMatches(record.Telefono, phone) || phoneMatches(record.Celular, phone))) return true;
+    if (name && nameMatches(record, name)) return true;
     return false;
   };
 
@@ -379,7 +387,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return false;
 
     case 'searchPhone':
-      return handle(searchByPhone(msg.phone));
+      return handle(searchByPhone(msg.phone, msg.name));
 
     case 'searchName':
       return handle(searchByName(msg.name));
