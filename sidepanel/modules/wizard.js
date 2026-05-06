@@ -5,7 +5,7 @@
 
 import { sendMsg } from './q10Api.js';
 import * as handlers from './handlers.js';
-import { icon, htmlText, htmlAttr, fullNameHtml, escHtml } from './helpers.js';
+import { icon, htmlText, htmlAttr, fullNameHtml, escHtml, normalizeLatamPhone } from './helpers.js';
 import {
   wizardState, catalogsCache,
   currentPhone, currentResult,
@@ -290,7 +290,7 @@ export async function submitWizardStep() {
         const wzCelularRaw = document.getElementById('wz-phone').value.trim();
         if (!wzEmail && !wzCelularRaw) throw new Error('Informe email ou celular (ao menos um).');
         if (!wzDocnum) throw new Error('Número de Identificación es obligatorio para avanzar al registro de estudiante.');
-        const wzCelularQ10 = wzCelularRaw.replace(/\D/g, '').slice(-12);
+        const wzCelularQ10 = normalizeLatamPhone(wzCelularRaw);
         const wzDetalle = [];
         if (wzEmail) wzDetalle.push({ Tipo_detalle: 'Email', Descripcion: wzEmail });
         if (wzCelularQ10) wzDetalle.push({ Tipo_detalle: 'Celular', Descripcion: wzCelularQ10 });

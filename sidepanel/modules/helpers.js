@@ -98,6 +98,43 @@ export function normalizeWizardPrefill(input) {
   return { ...input, ...parseFullName(fullStr) };
 }
 
+// Normalize a free-form phone string into the format Q10 expects on its
+// `Celular` columns. Q10 caps Detalle.Descripcion at 12 digits and most of
+// the LATAM tenants store local-format numbers (no country code) so we
+// detect known LATAM country codes and strip them when needed. If we can't
+// confidently identify the country, fall back to keeping the last 12 digits.
+//
+// Known prefixes (longest first; ITU E.164 region 5xx is LATAM):
+//   1-digit: 1 (US/CA — uncommon for LATAM CRMs but supported)
+//   2-digit: 51 PE, 52 MX, 53 CU, 54 AR, 55 BR, 56 CL, 57 CO, 58 VE
+//   3-digit: 501-509 Central America + Caribbean (BZ/GT/SV/HN/NI/CR/PA/HT/DO),
+//            591 BO, 592 GY, 593 EC, 595 PY, 597 SR, 598 UY
+const LATAM_CC = {
+  3: ['501','502','503','504','505','506','507','508','509','591','592','593','595','597','598'],
+  2: ['51','52','53','54','55','56','57','58'],
+  1: ['1'],
+};
+
+export function normalizeLatamPhone(raw, opts = {}) {
+  const max = opts.max ?? 12;
+  let digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length <= max) return digits;
+
+  for (const ccLen of [3, 2, 1]) {
+    for (const cc of LATAM_CC[ccLen]) {
+      if (digits.startsWith(cc)) {
+        const local = digits.slice(ccLen);
+        // A valid local number is 7-11 digits (e.g. BR mobile 11, US 10,
+        // CR 8). Skip if stripping would leave something unreasonably
+        // short (would mean the prefix coincidentally matched).
+        if (local.length >= 7 && local.length <= 11) return local;
+      }
+    }
+  }
+  return digits.slice(-max);
+}
+
 export function fmtMoney(v) {
   return escHtml('$ ' + Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 0 }));
 }
