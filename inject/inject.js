@@ -370,17 +370,47 @@
     return observer;
   }
 
+  // Pending phone-resolution retry timers, kept so we can cancel them when
+  // the user switches to yet another chat before the previous retries fire.
+  var pendingResolveTimers = [];
+
   function debouncedChatChange() {
     clearTimeout(debounceTimer);
+    pendingResolveTimers.forEach(function(t) { clearTimeout(t); });
+    pendingResolveTimers = [];
+
     debounceTimer = setTimeout(function() {
       var chat = getCurrentChat();
       if (!chat) return;
 
-      var newId = chat.chatId || chat.phone || chat.name;
-      if (newId && newId !== lastChatId) {
-        lastChatId = newId;
-        console.log(TAG, 'Chat changed →', chat.name || chat.phone, chat.isGroup ? '(group)' : '');
-        broadcastChatData(chat);
+      // Dedup key includes the phone resolution state. WA's lidPnCache is
+      // populated lazily as messages arrive, so the first detection of a
+      // LID chat often returns phone=null; a follow-up detection seconds
+      // later may finally resolve. We want THAT broadcast to go through
+      // even though the chatId is the same.
+      var newKey = (chat.chatId || chat.name || '') + ':' + (chat.phone || 'no_phone');
+      if (newKey === lastChatId) return;
+      lastChatId = newKey;
+      console.log(TAG, 'Chat changed →', chat.name || chat.phone, chat.isGroup ? '(group)' : '');
+      broadcastChatData(chat);
+
+      // Retry phone resolution for LID chats whose phone didn't resolve on
+      // the first try. Cap at two retries; if WA still doesn't know the
+      // phone after ~3s the cache really doesn't have it (user never
+      // received a message from this contact in this session).
+      if (!chat.isGroup && !chat.phone && chat.chatId) {
+        [800, 2500].forEach(function(delay) {
+          var t = setTimeout(function() {
+            var retry = getCurrentChat();
+            if (!retry || !retry.phone) return;
+            var k2 = (retry.chatId || retry.name || '') + ':' + retry.phone;
+            if (k2 === lastChatId) return;
+            lastChatId = k2;
+            console.log(TAG, 'Chat phone resolved on retry →', retry.phone);
+            broadcastChatData(retry);
+          }, delay);
+          pendingResolveTimers.push(t);
+        });
       }
     }, CHAT_CHANGE_DEBOUNCE);
   }
