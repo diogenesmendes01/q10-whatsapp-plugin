@@ -143,6 +143,57 @@
   }
 
   // ──────────────────────────────────────────────────────────────
+  //  Strategy 0: Comet runtime (WhatsApp Web >= 2.3000, post-Webpack)
+  //
+  //  Modern WA Web replaced its Webpack module system with a Meta-internal
+  //  "Comet" loader. Module IDs are now string names (e.g. "WAWebChatCollection")
+  //  exposed through `require('__debug').modulesMap` and loadable via
+  //  `importNamespace(id)`. Pattern reverse-engineered from wppconnect/wa-js
+  //  (https://github.com/wppconnect-team/wa-js/blob/main/src/loader/index.ts)
+  //  and pedroslopez/whatsapp-web.js PR #2816.
+  // ──────────────────────────────────────────────────────────────
+  function strategyCometDebug() {
+    try {
+      if (typeof global.require !== 'function') return null;
+
+      var debugMod;
+      try { debugMod = global.require('__debug'); } catch (_) { return null; }
+      if (!debugMod || !debugMod.modulesMap) return null;
+
+      // Sanity: the canonical post-Webpack id for the Chat collection.
+      // If WhatsApp ever renames it we'll need to adjust here.
+      if (!debugMod.modulesMap['WAWebChatCollection']) return null;
+
+      function loadCollection(id, fallbackProp) {
+        try {
+          var mod = typeof global.importNamespace === 'function'
+            ? global.importNamespace(id)
+            : global.require(id);
+          if (!mod) return null;
+          return mod.default || (fallbackProp && mod[fallbackProp]) || null;
+        } catch (_) { return null; }
+      }
+
+      var ChatCol = loadCollection('WAWebChatCollection', 'ChatCollection');
+      if (!ChatCol || typeof ChatCol.get !== 'function') return null;
+
+      var ContactCol = loadCollection('WAWebContactCollection', 'ContactCollection');
+      var MsgCol = loadCollection('WAWebMsgCollection', 'MsgCollection');
+
+      console.log(TAG, 'Strategy 0 (Comet __debug): ChatCollection found, Contact:', !!ContactCol, 'Msg:', !!MsgCol);
+      return {
+        Chat:    ChatCol,
+        Contact: ContactCol,
+        Msg:     MsgCol,
+        Conn:    null  // Conn is in a different module on Comet; not needed for batch extraction
+      };
+    } catch (err) {
+      console.warn(TAG, 'Strategy 0 (Comet) error:', err.message);
+    }
+    return null;
+  }
+
+  // ──────────────────────────────────────────────────────────────
   //  Strategy 1: Direct window.Store
   // ──────────────────────────────────────────────────────────────
   function strategyDirectWindowStore() {
@@ -260,11 +311,21 @@
 
   // ──────────────────────────────────────────────────────────────
   //  Public init — resolve the Store
+  //
+  //  Returns true when storeRef is set to a usable object. On WhatsApp Web
+  //  Comet builds the modules can take a few seconds to load after the page
+  //  starts evaluating, so we deliberately do NOT cache a permanent failure
+  //  state — the next call (e.g. when the user clicks "Extrair Contatos"
+  //  later in the session) can succeed even if the boot-time call didn't.
+  //  Once `broken` is set via consecutive runtime errors that's a different
+  //  story, but a missed first resolve isn't fatal.
   // ──────────────────────────────────────────────────────────────
   function resolveStore() {
-    if (storeRef) return storeRef !== 'broken';
+    if (storeRef && storeRef !== 'broken') return true;
+    if (broken) return false;
 
     var strategies = [
+      strategyCometDebug,         // Modern WA Web (>= 2.3000, post-Webpack)
       strategyDirectWindowStore,
       strategyRequireCollections,
       strategyWindowSearch,
@@ -277,7 +338,7 @@
         if (result) {
           storeRef = result;
           trackSuccess();
-          console.log(TAG, 'Store resolved successfully');
+          console.log(TAG, 'Store resolved successfully via', strategies[i].name);
           return true;
         }
       } catch (err) {
@@ -285,7 +346,9 @@
       }
     }
 
-    storeRef = 'broken';
+    // Leave storeRef as null so the next call can retry — modules may not
+    // have loaded yet at the time of bootstrap.
+    storeRef = null;
     return false;
   }
 
@@ -294,7 +357,10 @@
   // ──────────────────────────────────────────────────────────────
 
   function isAvailable() {
-    return storeRef && storeRef !== 'broken';
+    if (broken) return false;
+    if (storeRef && storeRef !== 'broken') return true;
+    // Lazy retry — modules may have loaded since the boot-time attempt.
+    return resolveStore();
   }
 
   function isBroken() {
