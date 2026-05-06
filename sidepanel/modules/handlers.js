@@ -676,6 +676,10 @@ export function showCreateNegocioModal(oportunidadData) {
           <input class="q10-form-input" id="q10-neg-nombre" value="${htmlAttr(defaultName)}" placeholder="Ej: Curso Português A1">
         </div>
         <div class="q10-form-group">
+          <label class="q10-form-label">Programa *</label>
+          <select class="q10-form-select" id="q10-neg-programa"><option value="">Cargando...</option></select>
+        </div>
+        <div class="q10-form-group">
           <label class="q10-form-label">Estado inicial *</label>
           <select class="q10-form-select" id="q10-neg-estado"><option value="">Carregando...</option></select>
         </div>
@@ -697,6 +701,35 @@ export function showCreateNegocioModal(oportunidadData) {
   document.body.appendChild(overlay);
   overlay.querySelector('.q10-modal-close-btn').addEventListener('click', removeModal);
   overlay.querySelector('.q10-modal-cancel').addEventListener('click', removeModal);
+
+  // Programa: required by Q10 (returns 400 "El campo 'Codigo_programa' es
+  // obligatorio." otherwise). Reuse the cached catalogs if already loaded
+  // by the wizard, fall back to a direct fetch.
+  const fillProgramas = (programas) => {
+    const select = document.getElementById('q10-neg-programa');
+    if (!select) return;
+    if (!programas?.length) {
+      select.innerHTML = '<option value="">— Não disponível —</option>';
+      return;
+    }
+    if (programas.length === 1) {
+      // Single-program institutions (like Genius Idiomas with "Curso de
+      // Português") — auto-select so the user doesn't have to think.
+      const p = programas[0];
+      select.innerHTML = `<option value="${htmlAttr(p.Codigo)}" selected>${htmlText(p.Nombre || p.Codigo)}</option>`;
+    } else {
+      select.innerHTML = '<option value="">— Selecciona un programa —</option>' +
+        programas.map(p => `<option value="${htmlAttr(p.Codigo)}">${htmlText(p.Nombre || p.Codigo)}</option>`).join('');
+    }
+  };
+  if (catalogsCache?.programas?.length) {
+    fillProgramas(catalogsCache.programas);
+  } else {
+    sendMsg('fetchCatalogs').then(cats => {
+      setCatalogsCache(cats);
+      fillProgramas(cats?.programas || []);
+    }).catch(() => fillProgramas([]));
+  }
 
   // Estados disponibles: pull /flujonegocios. Pre-select "Presentación" if
   // present (typical first stage); otherwise the lowest-percentage state.
@@ -725,11 +758,13 @@ export function showCreateNegocioModal(oportunidadData) {
 
   document.getElementById('q10-neg-submit').addEventListener('click', async () => {
     const nombre = document.getElementById('q10-neg-nombre').value.trim();
+    const programa = document.getElementById('q10-neg-programa').value;
     const estadoRaw = document.getElementById('q10-neg-estado').value;
     const valorRaw = document.getElementById('q10-neg-valor').value;
     const obs = document.getElementById('q10-neg-obs').value.trim();
 
     if (!nombre) { showToast('Nombre del negocio es obligatorio', 'error'); return; }
+    if (!programa) { showToast('Programa es obligatorio', 'error'); return; }
     if (!estadoRaw) { showToast('Estado es obligatorio', 'error'); return; }
 
     const btn = document.getElementById('q10-neg-submit');
@@ -738,6 +773,7 @@ export function showCreateNegocioModal(oportunidadData) {
       const reqBody = {
         Consecutivo_oportunidad: parseInt(consec, 10),
         Nombre_negocio: nombre,
+        Codigo_programa: programa,
         Consecutivo_estado_negocio: parseInt(estadoRaw, 10),
       };
       if (valorRaw) reqBody.Valor = parseFloat(valorRaw);
