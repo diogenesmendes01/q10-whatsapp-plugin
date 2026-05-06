@@ -374,21 +374,101 @@
     return null;
   }
 
+  // React 16+ stores component data on DOM nodes under property names like
+  // `__reactProps$<rand>` and `__reactFiber$<rand>`. Modern WA Web stripped
+  // every @c.us identifier from rendered HTML, so this is the only way to
+  // recover the phone for a chat row without round-tripping through Store.
+  function getReactInternalKeys(el) {
+    if (!el) return null;
+    let propsKey = null;
+    let fiberKey = null;
+    const keys = Object.keys(el);
+    for (const k of keys) {
+      if (!propsKey && k.startsWith('__reactProps$')) propsKey = k;
+      if (!fiberKey && (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'))) fiberKey = k;
+      if (propsKey && fiberKey) break;
+    }
+    return (propsKey || fiberKey) ? { propsKey, fiberKey } : null;
+  }
+
+  // Walk up the React fiber tree looking for an object that exposes a chat
+  // id / wid / contact identifier. Bounded by maxDepth so we don't loop on
+  // weird fiber graphs. Returns { phone, name } or null.
+  function chatInfoFromFiber(rootEl) {
+    try {
+      const keys = getReactInternalKeys(rootEl);
+      if (!keys) return null;
+
+      function readId(obj) {
+        if (!obj || typeof obj !== 'object') return null;
+        const id = obj.id || obj.wid || obj.contactId;
+        if (!id) return null;
+        const ser = id._serialized || (typeof id === 'string' ? id : null) || (id.toString && id.toString());
+        if (typeof ser !== 'string' || !ser.endsWith('@c.us')) return null;
+        const m = ser.match(/(\d{10,15})@c\.us/);
+        return m ? m[1] : null;
+      }
+      function readName(obj) {
+        if (!obj || typeof obj !== 'object') return null;
+        return obj.name || obj.formattedTitle || obj.pushname || obj.formattedName || obj.shortName || null;
+      }
+
+      // Try the props object first — usually the cleanest source.
+      if (keys.propsKey) {
+        const p = rootEl[keys.propsKey] || {};
+        const candidates = [p.chat, p.contact, p, p.props];
+        for (const c of candidates) {
+          const phone = readId(c);
+          if (phone) return { phone, name: readName(c) || readName(p.chat?.contact) || '' };
+        }
+      }
+
+      // Then walk up the fiber chain — stop at a reasonable depth.
+      let fiber = keys.fiberKey ? rootEl[keys.fiberKey] : null;
+      let depth = 0;
+      while (fiber && depth < 30) {
+        const sources = [fiber.memoizedProps, fiber.pendingProps, fiber.stateNode, fiber.memoizedState];
+        for (const src of sources) {
+          if (!src || typeof src !== 'object') continue;
+          const candidates = [src, src.chat, src.contact];
+          for (const c of candidates) {
+            const phone = readId(c);
+            if (phone) return { phone, name: readName(c) || readName(src.chat?.contact) || '' };
+          }
+        }
+        fiber = fiber.return;
+        depth++;
+      }
+    } catch (_) { /* fiber walk can throw on edge cases — swallow */ }
+    return null;
+  }
+
   function extractVisibleChatContacts() {
     const contacts = new Map();
     const pane = findChatListPane();
     if (!pane) return contacts;
 
-    // Find row containers. Try several roles in order; some WA builds use
-    // listitem, others use row, others nothing.
+    // Find row containers. Modern WA uses [role="row"] with a data-testid
+    // like "list-item-N"; older builds expose data-id directly.
     let rows = pane.querySelectorAll('[role="listitem"]');
     if (!rows.length) rows = pane.querySelectorAll('[role="row"]');
     if (!rows.length) rows = pane.querySelectorAll('[data-id]');
 
+    function readNameFromRow(row) {
+      const nameEl =
+        row.querySelector('[data-testid="cell-frame-title"] span[dir="auto"]') ||
+        row.querySelector('[data-testid="cell-frame-title"] span') ||
+        row.querySelector('[title]:not([title=""])') ||
+        row.querySelector('span[dir="auto"]') ||
+        row.querySelector('span[title]');
+      const raw = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
+      return /^[\d\s\+\-\(\)]+$/.test(raw) ? '' : raw;
+    }
+
     rows.forEach(row => {
-      // Phone: scan the row + every descendant for any attribute containing
-      // an @c.us identifier. Skips groups (@g.us) automatically.
+      // 1) Cheap path: scan attributes on the row + descendants for @c.us.
       let phone = phoneFromAnyAttr(row);
+      let name = null;
       if (!phone) {
         const descendants = row.querySelectorAll('*');
         for (const d of descendants) {
@@ -396,36 +476,31 @@
           if (phone) break;
         }
       }
+
+      // 2) Modern WA strips @c.us from HTML entirely; fall back to React
+      //    Fiber introspection. Try the row first, then key descendants
+      //    that typically carry the chat model in props (cell-frame-*).
+      if (!phone) {
+        const fiberTargets = [
+          row,
+          row.querySelector('[data-testid="cell-frame-container"]'),
+          row.querySelector('[data-testid="cell-frame"]'),
+          row.firstElementChild,
+        ].filter(Boolean);
+        for (const t of fiberTargets) {
+          const info = chatInfoFromFiber(t);
+          if (info?.phone) {
+            phone = info.phone;
+            if (info.name) name = info.name;
+            break;
+          }
+        }
+      }
+
       if (!phone) return;
-
-      const nameEl =
-        row.querySelector('[data-testid="cell-frame-title"] span') ||
-        row.querySelector('[title]:not([title=""])') ||
-        row.querySelector('span[dir="auto"]') ||
-        row.querySelector('span[title]');
-      const rawName = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
-      const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
-
-      if (!contacts.has(phone)) contacts.set(phone, { phone, name });
+      if (name == null) name = readNameFromRow(row);
+      if (!contacts.has(phone)) contacts.set(phone, { phone, name: name || '' });
     });
-
-    // Last-ditch sweep: if rows didn't yield anything, walk the entire pane
-    // looking for any element with an @c.us attribute. Slower but catches
-    // builds where WA flattened the structure or hid the row containers.
-    if (contacts.size === 0) {
-      pane.querySelectorAll('*').forEach(el => {
-        const phone = phoneFromAnyAttr(el);
-        if (!phone || contacts.has(phone)) return;
-        // Walk up to find a plausible row to grab the name from.
-        const row = el.closest('[role="listitem"], [role="row"], li, div[tabindex]') || el.parentElement;
-        const nameEl = row?.querySelector('[title]:not([title=""])')
-          || row?.querySelector('span[dir="auto"]')
-          || row?.querySelector('span');
-        const rawName = (nameEl?.getAttribute('title') || nameEl?.textContent || '').trim();
-        const name = /^[\d\s\+\-\(\)]+$/.test(rawName) ? '' : rawName;
-        contacts.set(phone, { phone, name });
-      });
-    }
 
     return contacts;
   }
@@ -547,6 +622,28 @@
       // cause is a fresh WA Web bundle that hides @c.us identifiers from the
       // DOM entirely. The user can paste this snippet back to us.
       try {
+        const firstRow = pane?.querySelector('[role="listitem"]') || pane?.querySelector('[role="row"]') || pane?.firstElementChild;
+        const fiberKeys = firstRow ? Object.keys(firstRow).filter(k => k.startsWith('__react')) : [];
+        let propsSummary = null;
+        if (fiberKeys.length) {
+          const propsKey = fiberKeys.find(k => k.startsWith('__reactProps$'));
+          if (propsKey) {
+            const p = firstRow[propsKey];
+            propsSummary = p ? Object.keys(p).slice(0, 20) : null;
+          }
+        }
+        // Also peek at the cell-frame-container's props since that's where
+        // the chat model usually lives in the React tree.
+        const cellFrame = firstRow?.querySelector('[data-testid="cell-frame-container"]');
+        let cellPropsSummary = null;
+        if (cellFrame) {
+          const cellPropsKey = Object.keys(cellFrame).find(k => k.startsWith('__reactProps$'));
+          if (cellPropsKey) {
+            const p = cellFrame[cellPropsKey];
+            cellPropsSummary = p ? Object.keys(p).slice(0, 20) : null;
+          }
+        }
+
         const paneDump = pane ? {
           tag: pane.tagName,
           id: pane.id,
@@ -555,8 +652,10 @@
           listItemCount: pane.querySelectorAll('[role="listitem"]').length,
           rowCount: pane.querySelectorAll('[role="row"]').length,
           dataIdCount: pane.querySelectorAll('[data-id]').length,
-          firstChildAttrs: pane.firstElementChild ? Array.from(pane.firstElementChild.attributes || []).map(a => `${a.name}="${a.value.slice(0,40)}"`) : null,
-          firstRowSnippet: (pane.querySelector('[role="listitem"]') || pane.querySelector('[role="row"]') || pane.firstElementChild)?.outerHTML?.slice(0, 400) || null
+          firstRowFiberKeys: fiberKeys,
+          firstRowPropsKeys: propsSummary,
+          firstCellFramePropsKeys: cellPropsSummary,
+          firstRowSnippet: firstRow?.outerHTML?.slice(0, 400) || null
         } : null;
         log('[batch] DIAGNOSTIC dump (paste this back if 0 contacts):', JSON.stringify(paneDump, null, 2));
       } catch (e) { warn('[batch] diagnostic dump failed:', e.message); }
