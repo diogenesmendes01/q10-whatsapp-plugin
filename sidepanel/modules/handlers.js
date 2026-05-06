@@ -988,6 +988,15 @@ export function showCreateActividadModal(contactData) {
             Crie uma oportunidad antes — Q10 gera 1+ negocios automaticamente.
           </p>
         </div>
+        <div class="q10-form-group" id="q10-act-tipo-resultado-wrap"><label class="q10-form-label">Tipo de resultado *</label>
+          <select class="q10-form-select" id="q10-act-tipo-resultado">
+            <option value="">Seleccione</option>
+            <option value="P" selected>Positivo</option>
+            <option value="N">Negativo</option>
+            <option value="S">Sin respuesta</option>
+            <option value="A">Aplazada</option>
+          </select>
+        </div>
         <div class="q10-form-group" id="q10-act-resultado-wrap"><label class="q10-form-label">Resultado *</label>
           <textarea class="q10-form-textarea" id="q10-act-resultado" placeholder="Resultado de la interacción"></textarea>
         </div>
@@ -1066,6 +1075,7 @@ export function showCreateActividadModal(contactData) {
   overlay.querySelectorAll('input[name="q10-act-estado"]').forEach(radio => {
     radio.addEventListener('change', (ev) => {
       const isCompletada = ev.target.value === 'C';
+      document.getElementById('q10-act-tipo-resultado-wrap').style.display = isCompletada ? '' : 'none';
       document.getElementById('q10-act-resultado-wrap').style.display = isCompletada ? '' : 'none';
       document.getElementById('q10-act-desc-wrap').style.display = isCompletada ? 'none' : '';
     });
@@ -1081,6 +1091,7 @@ export function showCreateActividadModal(contactData) {
     const fecha = document.getElementById('q10-act-fecha').value;
     const hora = document.getElementById('q10-act-hora').value;
     const estado = overlay.querySelector('input[name="q10-act-estado"]:checked').value;
+    const tipoResultado = document.getElementById('q10-act-tipo-resultado').value;
     const resultado = document.getElementById('q10-act-resultado').value.trim();
     const desc = document.getElementById('q10-act-desc').value.trim();
 
@@ -1088,6 +1099,7 @@ export function showCreateActividadModal(contactData) {
     if (!tipo) { showToast('Tipo é obrigatório', 'error'); return; }
     if (!fecha) { showToast('Fecha é obrigatória', 'error'); return; }
     if (!hora) { showToast('Hora é obrigatória', 'error'); return; }
+    if (estado === 'C' && !tipoResultado) { showToast('Tipo de resultado es obligatorio para Completada', 'error'); return; }
     if (estado === 'C' && !resultado) { showToast('Resultado obrigatório para Completada', 'error'); return; }
     if (estado === 'P' && !desc) { showToast('Descripción obrigatória para Programada', 'error'); return; }
 
@@ -1100,8 +1112,12 @@ export function showCreateActividadModal(contactData) {
         Estado_actividad: estado,
         Fecha_actividad: `${fecha}T${hora}:00`,
       };
-      if (estado === 'C') body.Resultado_actividad = resultado;
-      else body.Descripcion_actividad = desc;
+      if (estado === 'C') {
+        body.Tipo_resultado = tipoResultado;
+        body.Resultado_actividad = resultado;
+      } else {
+        body.Descripcion_actividad = desc;
+      }
       await sendMsg('createActividad', { body });
       showToast('Actividad registrada ✓', 'success');
       removeModal();
