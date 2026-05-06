@@ -121,7 +121,11 @@ export function renderResult(result, phone, name) {
     bindContactoActions(data || result);
   } else if (type === 'oportunidad') {
     renderOportunidad(result);
-    bindOportunidadActions(data || result);
+    // Pass through the negocios already fetched server-side so the
+    // Registrar Actividad modal can populate its dropdown without
+    // hitting /negocios again.
+    const enriched = data ? { ...data, _negocios: result.negocios || [] } : result;
+    bindOportunidadActions(enriched);
   } else {
     renderUnknown(phone || name);
     bindUnknownActions(phone || null, name || null);
@@ -645,8 +649,12 @@ export function showCreateActividadModal(contactData) {
   const overlay = el('div', 'q10-modal-overlay');
 
   // Pré-fill: aceita várias formas que cada card pode passar.
+  const cachedFirstNegocio = Array.isArray(contactData?._negocios) && contactData._negocios.length
+    ? contactData._negocios[0].Consecutivo_negocio
+    : null;
   const presetNegocio = contactData?.Consecutivo_negocio
     || contactData?.Negocio_favorito?.Consecutivo_negocio
+    || cachedFirstNegocio
     || '';
   const consecOportunidad = contactData?.Consecutivo_oportunidad
     || contactData?.Negocio_favorito?.Consecutivo_oportunidad
@@ -739,29 +747,44 @@ export function showCreateActividadModal(contactData) {
     input.value = name ? `${name} (${id})` : id;
   }).catch(() => {});
 
-  // Negocios: se temos Consecutivo_oportunidad, troca o input cru por dropdown.
-  if (consecOportunidad) {
+  // Negocios dropdown: prefer the negocios already fetched by the search
+  // (passed through as contactData._negocios) — falls back to a fresh fetch
+  // if we only have the Consecutivo_oportunidad and nothing more.
+  function populateNegocios(list) {
+    const select = document.getElementById('q10-act-negocio-select');
+    const input = document.getElementById('q10-act-negocio');
+    const hint = document.getElementById('q10-act-negocio-hint');
+    if (!select || !input) return;
+    if (!list || !list.length) {
+      // No negocios exist for this oportunidad. Q10 normally auto-creates
+      // one on POST /oportunidades but some tenants/configurations don't —
+      // tell the user how to recover instead of showing a blank dropdown.
+      if (hint) {
+        hint.style.color = '#B91C1C';
+        hint.textContent = 'Esta oportunidad não tem negocios. Crie um em Q10 → Mercadeo → Negocios e recarregue o painel.';
+      }
+      return;
+    }
+    select.innerHTML = '<option value="">— Selecciona el negocio —</option>' +
+      list.map(n => {
+        const id = n.Consecutivo_negocio;
+        const nombre = n.Nombre_negocio || n.Nombre || n.Descripcion || `Negocio ${id}`;
+        const estado = n.Nombre_estado_negocio || n.Estado_negocio || '';
+        const label = estado ? `${nombre} — ${estado}` : nombre;
+        const sel = String(id) === String(presetNegocio) ? 'selected' : '';
+        return `<option value="${htmlAttr(id)}" ${sel}>${htmlText(label)}</option>`;
+      }).join('');
+    select.style.display = '';
+    input.style.display = 'none';
+    if (hint) hint.textContent = `${list.length} negocio(s) encontrado(s) nesta oportunidad.`;
+  }
+
+  const cachedNegocios = Array.isArray(contactData?._negocios) ? contactData._negocios : null;
+  if (cachedNegocios) {
+    populateNegocios(cachedNegocios);
+  } else if (consecOportunidad) {
     sendMsg('fetchNegocios', { consecutivoOportunidad: consecOportunidad })
-      .then(negocios => {
-        const list = Array.isArray(negocios) ? negocios : (negocios?.data || []);
-        if (!list.length) return; // mantém o input cru
-        const select = document.getElementById('q10-act-negocio-select');
-        const input = document.getElementById('q10-act-negocio');
-        const hint = document.getElementById('q10-act-negocio-hint');
-        if (!select || !input) return;
-        select.innerHTML = '<option value="">— Selecciona el negocio —</option>' +
-          list.map(n => {
-            const id = n.Consecutivo_negocio;
-            const nombre = n.Nombre_negocio || n.Nombre || n.Descripcion || `Negocio ${id}`;
-            const estado = n.Nombre_estado_negocio || n.Estado_negocio || '';
-            const label = estado ? `${nombre} — ${estado}` : nombre;
-            const sel = String(id) === String(presetNegocio) ? 'selected' : '';
-            return `<option value="${htmlAttr(id)}" ${sel}>${htmlText(label)}</option>`;
-          }).join('');
-        select.style.display = '';
-        input.style.display = 'none';
-        if (hint) hint.textContent = `${list.length} negocio(s) encontrado(s) nesta oportunidad.`;
-      })
+      .then(negocios => populateNegocios(Array.isArray(negocios) ? negocios : (negocios?.data || [])))
       .catch(() => { /* mantém input cru */ });
   }
 

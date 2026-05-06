@@ -232,7 +232,18 @@ export function renderContacto(data) {
 // ================================================================
 export function renderOportunidad(result) {
   const d = result.data;
-  const name = fullNameHtml(d);
+
+  // Q10 returns oportunidad-specific field names. Fall back to generic
+  // ones for forward compat in case the tenant returns differently.
+  // Logged once to surface unexpected shapes when the user reports issues.
+  if (typeof console !== 'undefined') console.log('[Q10] oportunidad payload:', d);
+
+  const oppId = d.Consecutivo_oportunidad ?? d.Codigo ?? d.Id ?? '';
+  const oppName = d.Nombre_oportunidad || d.Numero_identificacion_oportunidad || fullName(d) || '—';
+  const email = d.Correo_electronico || d.Email || '';
+  const telefono = d.Telefono || '';
+  const celular = d.Celular || '';
+  const estado = d.Nombre_estado_oportunidad || d.Estado_oportunidad || d.Estado || d.Etapa || d.Nombre_estado_negocio || '';
 
   let negociosHtml = '';
   if (result.negocios && result.negocios.length > 0) {
@@ -241,9 +252,9 @@ export function renderOportunidad(result) {
         <div class="q10-section-title">${icon('briefcase','q10-section-icon')} Negocios</div>
         ${result.negocios.map(n => `
           <div class="q10-info-card">
-            <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${htmlText(n.Nombre || n.Descripcion)}</span></div>
-            <div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${fmtMoney(n.Valor)}</span></div>
-            <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${htmlText(n.Estado)}</span></span></div>
+            <div class="q10-info-row"><span class="q10-info-label">Negocio</span><span class="q10-info-value">${htmlText(n.Nombre_negocio || n.Nombre || n.Descripcion || ('Negocio ' + (n.Consecutivo_negocio ?? '')))}</span></div>
+            ${n.Valor != null ? `<div class="q10-info-row"><span class="q10-info-label">Valor</span><span class="q10-info-value">${fmtMoney(n.Valor)}</span></div>` : ''}
+            <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-blue">${htmlText(n.Nombre_estado_negocio || n.Estado_negocio || n.Estado || '—')}</span></span></div>
           </div>`).join('')}
       </div>`;
   }
@@ -255,25 +266,25 @@ export function renderOportunidad(result) {
         <div class="q10-section-title">${icon('activity','q10-section-icon')} Actividades Recientes</div>
         ${result.actividades.map(a => `
           <div class="q10-activity-item">
-            <div class="q10-activity-type">${htmlText(a.Tipo, 'Actividad')}</div>
-            <div class="q10-activity-desc">${htmlText(a.Descripcion || a.Observaciones)}</div>
-            <div class="q10-activity-date">${a.Fecha ? fmtDate(a.Fecha) : ''}</div>
+            <div class="q10-activity-type">${htmlText(a.Tipo_actividad || a.Tipo, 'Actividad')}</div>
+            <div class="q10-activity-desc">${htmlText(a.Resultado_actividad || a.Descripcion || a.Observaciones)}</div>
+            <div class="q10-activity-date">${a.Fecha_actividad || a.Fecha ? fmtDate(a.Fecha_actividad || a.Fecha) : ''}</div>
           </div>`).join('')}
       </div>`;
   }
 
   body().innerHTML = `
-    ${phoneHtml(d.Celular||d.Telefono||null)}
+    ${phoneHtml(celular || telefono || null)}
     <span class="q10-contact-type q10-type-oportunidad">${icon('briefcase','q10-section-icon')} Lead / Oportunidad</span>
-    <div class="q10-contact-name">${name}</div>
-    <div class="q10-contact-id">ID: ${htmlText(d.Codigo)}</div>
+    <div class="q10-contact-name">${htmlText(oppName)}</div>
+    <div class="q10-contact-id">ID: ${htmlText(oppId)}</div>
     <div class="q10-section">
       <div class="q10-section-title">${icon('user','q10-section-icon')} Información</div>
       <div class="q10-info-card">
-        <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(d.Email)}</span></div>
-        <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(d.Telefono)}</span></div>
-        <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(d.Celular)}</span></div>
-        <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${htmlText(d.Estado || d.Etapa)}</span></span></div>
+        <div class="q10-info-row"><span class="q10-info-label">Email</span><span class="q10-info-value">${htmlText(email)}</span></div>
+        <div class="q10-info-row"><span class="q10-info-label">Teléfono</span><span class="q10-info-value">${htmlText(telefono)}</span></div>
+        <div class="q10-info-row"><span class="q10-info-label">Celular</span><span class="q10-info-value">${htmlText(celular)}</span></div>
+        <div class="q10-info-row"><span class="q10-info-label">Estado</span><span class="q10-info-value"><span class="q10-badge q10-badge-yellow">${htmlText(estado)}</span></span></div>
       </div>
     </div>
     ${negociosHtml}
