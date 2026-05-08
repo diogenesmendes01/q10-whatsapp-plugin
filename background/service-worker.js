@@ -272,15 +272,30 @@ async function searchContacts({ phone, name }) {
   }
 
   // 3. Search oportunidades. /oportunidades requires Fecha_inicio +
-  // Fecha_fin filters; cover the last 2 years which is enough for active
-  // leads. We also pull the related negocios + recent actividades so the
-  // sidepanel can render the full lead view in one request batch.
+  // Fecha_fin filters; cover the last 5 years so freshly-created leads
+  // (with future-dated cierre or weird timezones) don't fall outside the
+  // window. We also pull negocios + recent actividades so the sidepanel
+  // can render the full lead view in one request batch.
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86400000).toISOString().split('T')[0];
-    const oportunidades = await apiGet('/oportunidades', { Fecha_inicio: twoYearsAgo, Fecha_fin: today });
+    // End date is +1 day in case of timezone offset where Q10 sees "now"
+    // in a future calendar day relative to UTC.
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const fiveYearsAgo = new Date(Date.now() - 5 * 365 * 86400000).toISOString().split('T')[0];
+    // Bypass the in-memory cache for the search query so a freshly-created
+    // opportunity surfaces immediately when the user navigates back to the
+    // chat — was a real bug where the cached list (5 min TTL) didn't include
+    // the new opp even after clearCache() because the cache key was poked
+    // at exactly the wrong moment.
+    const oportunidades = await apiGet('/oportunidades', { Fecha_inicio: fiveYearsAgo, Fecha_fin: tomorrow }, { noCache: true });
     const _opps = normalizeList(oportunidades);
+    console.log('[Q10] searchContacts: /oportunidades returned', _opps.length, 'records. Searching for phone:', phone, 'name:', name);
     const match = _opps.find(matchFn);
+    if (!match && _opps.length > 0) {
+      // Diagnostic: dump the first few records when match fails so we can
+      // see what fields Q10 actually returned.
+      console.log('[Q10] searchContacts: no opp match. Sample record fields:', Object.keys(_opps[0] || {}).slice(0, 30));
+      console.log('[Q10] searchContacts: first 3 records:', _opps.slice(0, 3));
+    }
     if (match) {
       results.type = 'oportunidad';
       results.data = match;
