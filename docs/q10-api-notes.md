@@ -59,7 +59,8 @@ A mesma key funciona nos dois hosts e retorna os mesmos dados. Migração proxy 
 
 ### Entidades (GET individual)
 
-- `GET /estudiantes/{id}` — detalhe de aluno (`id` = Codigo_persona). **`/estudiantes` (lista) retorna 404**, mas o detalhe funciona.
+- `GET /estudiantes/{id}` — detalhe de aluno (`id` = Codigo_persona).
+- `GET /estudiantes?Periodo={Periodo}` — **lista paginada** de alunos matriculados. Ver seção abaixo. (A lista *sem* `Periodo` retorna 404 — foi o que gerou a antiga nota errada de "`/estudiantes` lista não existe".)
 - `GET /usuarios/{id}` — detalhe de usuário-login (diferente de estudante).
 - `GET /oportunidades/{Consecutivo_oportunidad}` — inclui `Negocio_favorito.Consecutivo_negocio` embutido.
 - `GET /negocios/{Consecutivo_negocio}` — detalhe do negocio.
@@ -72,6 +73,76 @@ A mesma key funciona nos dois hosts e retorna os mesmos dados. Migração proxy 
 | `GET /oportunidades` | `Fecha_inicio` + `Fecha_fin` | Sem as duas datas → 404 |
 | `GET /negocios` | Pelo menos 1 param de filtro | Sem nenhum → 400 "ingresar al menos un parámetro" |
 | `GET /inscripciones` | Pelo menos 1 filtro | 400 "No se ha ingresado ningún filtro" |
+| `GET /estudiantes` | `Periodo` (Consecutivo, int) | Sem `Periodo` → 404. Demais filtros são opcionais. Ver schema abaixo. |
+
+#### GET /estudiantes — lista paginada (Obtener estudiantes)
+
+Fonte: doc oficial Q10 (não revalidado ao vivo ainda). Retorna os alunos **matriculados** no período.
+
+```
+GET /estudiantes?Periodo={Periodo}[&Sede_jornada][&Programa][&Curso][&Fecha_inicio][&Fecha_fin][&Limit][&Offset]
+```
+
+| Param | Obrigatório | Tipo | Significado |
+|---|---|---|---|
+| `Periodo` | **sim** | int | `Consecutivo` do período |
+| `Sede_jornada` | não | int | `Consecutivo` da Sede-Jornada |
+| `Programa` | não | string | Código do programa |
+| `Curso` | não | int | `Consecutivo` do curso em que está matriculado |
+| `Fecha_inicio` | não | string | Início do range da data de matrícula (`YYYY-MM-DD`) |
+| `Fecha_fin` | não | string | Fim do range da data de matrícula (`YYYY-MM-DD`) |
+| `Limit` | não | int | Tamanho da página — **máximo 5000 registros por página** |
+| `Offset` | não | int | Número da página |
+
+Cada registro é mais rico que o `POST /estudiantes` (traz matrícula, sede/jornada, grupo, nível, programa e familiares):
+
+```json
+{
+  "Codigo_estudiante": "123",
+  "Primer_nombre": "Juan",
+  "Segundo_nombre": "Felipe",
+  "Primer_apellido": "Ramirez",
+  "Segundo_apellido": "Guerra",
+  "Codigo_tipo_identificacion": "1",
+  "Numero_identificacion": "123123",
+  "Genero": "M",
+  "Email": "juan@yopmail.com",
+  "Telefono": "123",
+  "Celular": "123",
+  "Fecha_nacimiento": "1999-01-01T12:00:00Z",
+  "Lugar_nacimiento": "05000",
+  "Lugar_residencia": "05000",
+  "Direccion": "CR 123",
+  "Consecutivo_sedejornada": 1,
+  "Nombre_sedejornada": "Principal - Mañana",
+  "Codigo_matricula": "123123",
+  "Fecha_matricula": "2025-01-01T12:00:00Z",
+  "Fecha_renovacion": null,
+  "Condicion_matricula": "Nuevo",
+  "Codigo_sede": "123",
+  "Nombre_sede": "Principal",
+  "Codigo_jornada": "123",
+  "Nombre_jornada": "Mañana",
+  "Codigo_programa": "P1",
+  "Nombre_programa": "Programa 1",
+  "Consecutivo_grupo": 1,
+  "Nombre_grupo": "Grupo 1",
+  "Consecutivo_periodo": 1,
+  "Nombre_periodo": "Período 1",
+  "Codigo_nivel": "1",
+  "Nombre_nivel": "Nivel 1",
+  "Familiares_relacionados": [
+    {
+      "Codigo_familiar": "123",
+      "Numero_identificacion": "123123",
+      "Parentesco": "Padre",
+      "Acudiente": false
+    }
+  ]
+}
+```
+
+> ⚠️ Implicação no plugin: o `exportAll` (`background/service-worker.ts`) usa `/usuarios` como substituto da lista de estudantes — herança da nota errada do 404. Com este endpoint dá pra exportar a lista real de matriculados (basta resolver o `Consecutivo_periodo` ativo via `/periodos`).
 
 ### Criação (POST)
 
@@ -237,7 +308,7 @@ Quando a doc oficial não lista campos obrigatórios, use esta receita:
 
 ## Pegadinhas documentadas
 
-- **`/estudiantes` (lista) → 404** no proxy. Use `/estudiantes/{id}` individual ou filtre `/usuarios` por role `"Estudiante"`.
+- **`/estudiantes` (lista) → 404 _somente se faltar o param obrigatório `Periodo`_.** Com `Periodo` a lista paginada funciona (ver "Obtener estudiantes" acima). A nota antiga dizia que a lista não existia — estava errada: o problema era o param faltando.
 - **`/paises` → 404** no tenant testado. Use valores hardcoded se precisar.
 - **`/sedes-jornadas` (com hífen) → 404.** O endpoint certo é `/sedesjornadas`.
 - **`/annoslectivos` → 400** em instituições ETDH/Superior (só aplica a colegios).
